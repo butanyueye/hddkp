@@ -629,16 +629,32 @@ function GameContent() {
     setOpponent(null);
     
     try {
+      // Query for waiting matches, limit to 10 to avoid large reads
       const q = query(
         collection(db, 'matches'), 
         where('status', '==', 'waiting'), 
-        where('player1.uid', '!=', user.uid),
-        limit(1)
+        limit(10)
       );
       const querySnapshot = await getDocs(q);
       
-      if (!querySnapshot.empty) {
-        const matchDoc = querySnapshot.docs[0];
+      // Filter locally to avoid complex composite index requirements
+      const validDocs = querySnapshot.docs.filter(doc => {
+        const data = doc.data();
+        const isNotMe = data.player1?.uid !== user.uid;
+        const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+        const isRecent = (Date.now() - createdAt) < 30000; // 30 seconds
+        return isNotMe && isRecent;
+      });
+      
+      if (validDocs.length > 0) {
+        // Sort by newest first
+        validDocs.sort((a, b) => {
+          const timeA = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : 0;
+          const timeB = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : 0;
+          return timeB - timeA;
+        });
+        
+        const matchDoc = validDocs[0];
         const matchRef = doc(db, 'matches', matchDoc.id);
         
         try {
@@ -802,6 +818,11 @@ function GameContent() {
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
   }, [difficulty, selectedCharacter]);
 
+  const matchStateRef = useRef(matchState);
+  useEffect(() => {
+    matchStateRef.current = matchState;
+  }, [matchState]);
+
   // --- Match Real-time Sync ---
   useEffect(() => {
     if (!matchId || !user) return;
@@ -818,7 +839,7 @@ function GameContent() {
           setOpponent(oppData);
         }
         
-        if (data.status === 'playing' && matchState === 'matching') {
+        if (data.status === 'playing' && matchStateRef.current === 'matching') {
           // Match found, start game!
           setMatchState('playing');
           startGame();
@@ -840,7 +861,7 @@ function GameContent() {
     });
     
     return () => unsubscribe();
-  }, [matchId, user, matchState, startGame]);
+  }, [matchId, user, startGame]);
 
   const activateHjdjSkill = useCallback(() => {
     if (selectedCharacter === 'hjdj' && playerRef.current && playerRef.current.hjdjSkillCooldown <= 0) {
