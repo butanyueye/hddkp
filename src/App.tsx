@@ -2147,12 +2147,12 @@ function GameContent() {
               <div className="flex flex-col gap-4 w-full px-10">
                 <button 
                   onClick={revive}
-                  disabled={diamonds < 50}
-                  className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < 50 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  disabled={diamonds < 100}
+                  className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < 100 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
                   style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                 >
                   <span>复活</span>
-                  <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 50</span>
+                  <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 100</span>
                 </button>
 
                 <button 
@@ -2161,14 +2161,6 @@ function GameContent() {
                   style={{ background: 'linear-gradient(to bottom, #fff59d, #fbc02d, #f57f17)', textShadow: '2px 2px 0 #e65100, -1px -1px 0 #e65100, 1px -1px 0 #e65100, -1px 1px 0 #e65100' }}
                 >
                   再来一局
-                </button>
-
-                <button 
-                  onClick={() => setGameState('start')}
-                  className="w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#757575,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#757575]"
-                  style={{ background: 'linear-gradient(to bottom, #eeeeee, #bdbdbd, #757575)', textShadow: '2px 2px 0 #424242, -1px -1px 0 #424242, 1px -1px 0 #424242, -1px 1px 0 #424242' }}
-                >
-                  回到主页
                 </button>
               </div>
             </div>
