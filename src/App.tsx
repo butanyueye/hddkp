@@ -28,8 +28,7 @@ import {
   Timestamp,
   runTransaction,
   getDocs,
-  where,
-  deleteDoc
+  where
 } from 'firebase/firestore';
 
 const GRAVITY = 0.8;
@@ -623,31 +622,18 @@ function GameContent() {
     }
   };
 
-  const startMatchmaking = async (retryCount = 0) => {
+  const startMatchmaking = async () => {
     if (!user) {
       setShowAuthModal(true);
       return;
     }
-    
-    // Reset state
     setMatchState('matching');
-    matchStateRef.current = 'matching';
     setIsMultiplayer(true);
     setMatchResult(null);
     setOpponent(null);
-    setMatchId(null);
     
     try {
-      // Add a small random jitter to reduce simultaneous creation collisions
-      // Only add jitter if not a retry
-      if (retryCount === 0) {
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
-      }
-
-      // Check if we are still in matching state after jitter
-      if (matchStateRef.current !== 'matching') return;
-
-      // Query for waiting matches
+      // Query for waiting matches, limit to 10 to avoid large reads
       const q = query(
         collection(db, 'matches'), 
         where('status', '==', 'waiting'), 
@@ -655,6 +641,7 @@ function GameContent() {
       );
       const querySnapshot = await getDocs(q);
       
+      // Filter locally to avoid complex composite index requirements
       const validDocs = querySnapshot.docs.filter(doc => {
         const data = doc.data();
         const isNotMe = data.player1?.uid !== user.uid;
@@ -692,39 +679,15 @@ function GameContent() {
               }
             });
           });
-          
-          console.log("Joined match:", matchDoc.id);
           setMatchId(matchDoc.id);
         } catch (e) {
-          console.log("Transaction failed, retrying...", e);
-          if (retryCount < 3) {
-            setTimeout(() => startMatchmaking(retryCount + 1), 500);
-          } else {
-            createNewMatch();
-          }
+          console.log("Transaction failed: ", e);
+          createNewMatch();
         }
       } else {
-        // No match found, but wait a tiny bit more to see if one appears (double check)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        if (matchStateRef.current !== 'matching') return;
-        
-        const secondCheck = await getDocs(q);
-        const stillNoMatches = secondCheck.docs.filter(doc => {
-          const data = doc.data();
-          return data.player1?.uid !== user.uid && 
-                 data.status === 'waiting' && 
-                 (Date.now() - (data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now())) < 30000;
-        }).length === 0;
-
-        if (stillNoMatches) {
-          createNewMatch();
-        } else {
-          // A match appeared! Retry the whole process once.
-          startMatchmaking(retryCount + 1);
-        }
+        createNewMatch();
       }
     } catch (e) {
-      console.error("Matchmaking error:", e);
       handleFirestoreError(e, OperationType.LIST, 'matches');
       setMatchState('none');
       setMatchId(null);
@@ -733,26 +696,27 @@ function GameContent() {
   };
 
   const updateMatchScore = useCallback(async (currentScore: number) => {
-    if (!isMultiplayer || !matchId || !user || !matchDataRef.current) return;
+    if (!isMultiplayer || !matchId || !user || !opponent) return;
     try {
       const matchRef = doc(db, 'matches', matchId);
-      const data = matchDataRef.current;
-      const isPlayer1 = data.player1.uid === user.uid;
-      const playerKey = isPlayer1 ? 'player1' : 'player2';
-      
-      // Update locally first to avoid waiting for snapshot
-      matchDataRef.current = {
-        ...data,
-        [playerKey]: { ...data[playerKey], score: currentScore }
-      };
-
-      await setDoc(matchRef, {
-        [playerKey]: { ...data[playerKey], score: currentScore }
-      }, { merge: true });
+      // We can determine if we are player1 or player2 based on the opponent state
+      // But actually, we need to know our own key.
+      // Let's just use the current data from the snapshot if possible, or we can fetch it once.
+      // Since we don't have our playerKey stored, we can fetch it or store it.
+      // Let's just fetch it for now, or use the fact that if opponent is player2, we are player1.
+      const docSnap = await getDoc(matchRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const isPlayer1 = data.player1.uid === user.uid;
+        const playerKey = isPlayer1 ? 'player1' : 'player2';
+        await setDoc(matchRef, {
+          [playerKey]: { ...data[playerKey], score: currentScore }
+        }, { merge: true });
+      }
     } catch (e) {
-      console.error("Score sync error:", e);
+      console.error(e);
     }
-  }, [isMultiplayer, matchId, user]);
+  }, [isMultiplayer, matchId, user, opponent]);
 
   const finishMatch = useCallback(async (finalScore: number) => {
     if (!isMultiplayer || !matchId || !user) return;
@@ -861,7 +825,6 @@ function GameContent() {
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
   }, [difficulty, selectedCharacter]);
 
-  const matchDataRef = useRef<any>(null);
   const matchStateRef = useRef(matchState);
   useEffect(() => {
     matchStateRef.current = matchState;
@@ -869,18 +832,15 @@ function GameContent() {
 
   // --- Match Real-time Sync ---
   useEffect(() => {
-    if (!matchId || !user) {
-      matchDataRef.current = null;
-      return;
-    }
+    if (!matchId || !user) return;
     
     const unsubscribe = onSnapshot(doc(db, 'matches', matchId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        matchDataRef.current = data;
         
         const isPlayer1 = data.player1.uid === user.uid;
         const oppData = isPlayer1 ? data.player2 : data.player1;
+        const myData = isPlayer1 ? data.player1 : data.player2;
         
         if (oppData) {
           setOpponent(oppData);
@@ -890,14 +850,12 @@ function GameContent() {
           // Match found, show VS screen!
           setMatchState('vs');
           setTimeout(() => {
-            if (matchStateRef.current === 'vs') {
-              setMatchState('playing');
-              startGame();
-            }
+            setMatchState('playing');
+            startGame();
           }, 3000);
         }
         
-        if (data.status === 'finished' && matchStateRef.current !== 'finished') {
+        if (data.status === 'finished') {
           setMatchState('finished');
           if (data.winner === user.uid) {
             setMatchResult('win');
@@ -914,22 +872,6 @@ function GameContent() {
     
     return () => unsubscribe();
   }, [matchId, user, startGame]);
-
-  // --- Matchmaking Timeout ---
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    if (matchState === 'matching') {
-      timeout = setTimeout(() => {
-        if (matchStateRef.current === 'matching') {
-          setMatchMessage('匹配超时，请重试');
-          setMatchState('none');
-          setMatchId(null);
-          setIsMultiplayer(false);
-        }
-      }, 30000); // 30 seconds timeout
-    }
-    return () => clearTimeout(timeout);
-  }, [matchState]);
 
   const activateHjdjSkill = useCallback(() => {
     if (selectedCharacter === 'hjdj' && playerRef.current && playerRef.current.hjdjSkillCooldown <= 0) {
@@ -2114,7 +2056,7 @@ function GameContent() {
                     无尽<br/><span className="text-2xl">模式</span>
                   </button>
                   <button 
-                    onClick={() => startMatchmaking()}
+                    onClick={startMatchmaking}
                     className="flex-1 py-3 rounded-3xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] leading-tight"
                     style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                   >
@@ -2308,24 +2250,11 @@ function GameContent() {
                 </p>
                 
                 <button 
-                  onClick={async () => {
-                    const currentMatchId = matchId;
+                  onClick={() => {
                     setMatchState('none');
                     setMatchId(null);
                     setIsMultiplayer(false);
-                    
-                    // Try to clean up the match if we were the creator
-                    if (currentMatchId && user) {
-                      try {
-                        const matchRef = doc(db, 'matches', currentMatchId);
-                        const snap = await getDoc(matchRef);
-                        if (snap.exists() && snap.data().status === 'waiting' && snap.data().player1.uid === user.uid) {
-                          await deleteDoc(matchRef);
-                        }
-                      } catch (e) {
-                        console.error("Failed to cleanup match:", e);
-                      }
-                    }
+                    // Optionally, delete or update the match document to cancel
                   }}
                   className="mt-8 px-8 py-3 rounded-full bg-red-500/20 border-2 border-red-500 text-red-400 font-bold hover:bg-red-500/40 transition-colors relative z-10"
                 >
