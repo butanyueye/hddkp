@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "A single entry in the global leaderboard",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique ID of the user" },
+        "name": { "type": "string", "description": "The display name of the user" },
+        "score": { "type": "integer", "description": "The high score achieved" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the score was achieved" }
+      },
+      "required": ["userId", "name", "score", "timestamp"]
+    },
+    "UserStats": {
+      "title": "UserStats",
+      "description": "Individual user statistics and progress",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique ID of the user" },
+        "name": { "type": "string", "description": "The display name of the user" },
+        "email": { "type": "string", "description": "The email of the user" },
+        "highScore": { "type": "integer", "description": "The user's personal best score" },
+        "totalGames": { "type": "integer", "description": "Total number of games played" },
+        "diamonds": { "type": "integer", "description": "Total diamonds collected" },
+        "inventory": { 
+          "type": "object", 
+          "description": "Purchased items and their counts",
+          "properties": {
+            "shield": { "type": "integer" },
+            "magnet": { "type": "integer" },
+            "doubleScore": { "type": "integer" },
+            "dash": { "type": "integer" }
+          }
+        },
+        "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievements" }
+      },
+      "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory"]
+    },
+    "CheckIn": {
+      "title": "CheckIn",
+      "description": "User daily check-in data",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique ID of the user" },
+        "lastCheckIn": { "type": "string", "format": "date-time", "description": "The last time the user checked in" },
+        "checkInCount": { "type": "integer", "description": "Number of consecutive days checked in" }
+      },
+      "required": ["userId", "lastCheckIn", "checkInCount"]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{entryId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global high scores"
+    },
+    "/users/{userId}": {
+      "schema": "UserStats",
+      "description": "User-specific data"
+    },
+    "/checkIn/{userId}": {
+      "schema": "CheckIn",
+      "description": "User daily check-in data"
+    }
+  }
+}

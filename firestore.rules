@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: checkIn
+    // Document ID: {userId}
+    // Fields:
+    //   - userId: string (required) - The unique ID of the user
+    //   - lastCheckIn: timestamp (required) - The last time the user checked in
+    //   - checkInCount: number (required) - Number of consecutive days checked in
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= minLen && 
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isPositiveNumber(field) {
+      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    }
+
+    function isValidList(listField, maxSize) {
+      return request.resource.data[listField] is list && request.resource.data[listField].size() <= maxSize;
+    }
+
+    function isValidInventoryMap(mapData) {
+      return mapData is map && 
+             mapData.keys().hasOnly(['shield', 'magnet', 'doubleScore', 'dash']) &&
+             (!('shield' in mapData) || mapData.shield is number && mapData.shield >= 0) &&
+             (!('magnet' in mapData) || mapData.magnet is number && mapData.magnet >= 0) &&
+             (!('doubleScore' in mapData) || mapData.doubleScore is number && mapData.doubleScore >= 0) &&
+             (!('dash' in mapData) || mapData.dash is number && mapData.dash >= 0);
+    }
+
+    // Domain Validators
+    
+    function isValidLeaderboardEntry(data) {
+      return hasRequiredFields(['userId', 'name', 'score', 'timestamp']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp']) &&
+             validStringLength('userId', 1, 100) &&
+             validStringLength('name', 1, 50) &&
+             isPositiveNumber('score') &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidUserStats(data) {
+      return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
+             validStringLength('userId', 1, 100) &&
+             (!('name' in data) || validStringLength('name', 0, 100)) &&
+             (!('email' in data) || validStringLength('email', 0, 100)) &&
+             isPositiveNumber('highScore') &&
+             isPositiveNumber('totalGames') &&
+             isPositiveNumber('diamonds') &&
+             isValidInventoryMap(data.inventory) &&
+             isValidList('achievements', 100);
+    }
+
+    function isValidCheckIn(data) {
+      return hasRequiredFields(['lastCheckIn', 'checkInCount']) &&
+             hasOnlyAllowedFields(['userId', 'lastCheckIn', 'checkInCount']) &&
+             (!('userId' in data) || validStringLength('userId', 1, 100)) &&
+             data.lastCheckIn is timestamp &&
+             isPositiveNumber('checkInCount');
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /leaderboard/{entryId} {
+      // Anyone authenticated can read the leaderboard
+      allow read: if isAuthenticated();
+      // TEMPORARY: Allow any authenticated user to restore the leaderboard
+      allow write: if isAuthenticated();
+    }
+
+    match /users/{userId} {
+      // TEMPORARY: Allow any authenticated user to read all users for restoration
+      allow read: if isAuthenticated();
+      // Only the owner can create their own stats
+      allow create: if isOwner(userId) && 
+                       isValidUserStats(request.resource.data) && 
+                       uidUnchanged();
+      // Only the owner can update their own stats
+      allow update: if isOwner(userId) && 
+                       isValidUserStats(request.resource.data) && 
+                       uidNotModified();
+      allow delete: if isOwner(userId);
+    }
+
+    match /checkIn/{userId} {
+      // Only the owner can read/create/update their own check-in data
+      allow read, create, update: if isOwner(userId) && isValidCheckIn(request.resource.data);
+      allow delete: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
