@@ -629,7 +629,12 @@ function GameContent() {
     setOpponent(null);
     
     try {
-      const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(1));
+      const q = query(
+        collection(db, 'matches'), 
+        where('status', '==', 'waiting'), 
+        where('player1.uid', '!=', user.uid),
+        limit(1)
+      );
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
@@ -1101,13 +1106,14 @@ function GameContent() {
         const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1);
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
-        scoreAccumulatorRef.current -= integerIncrement;
-
-        const newScore = s + integerIncrement;
+        
         if (integerIncrement > 0) {
+          scoreAccumulatorRef.current -= integerIncrement;
+          const newScore = s + integerIncrement;
           checkAchievements(newScore);
+          return newScore;
         }
-        return newScore;
+        return s;
       });
 
       // Physics
