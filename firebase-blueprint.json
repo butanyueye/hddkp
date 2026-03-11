@@ -47,6 +47,37 @@
         "checkInCount": { "type": "integer", "description": "Number of consecutive days checked in" }
       },
       "required": ["userId", "lastCheckIn", "checkInCount"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Multiplayer match data",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "player1": { 
+          "type": "object",
+          "properties": {
+            "uid": { "type": "string" },
+            "name": { "type": "string" },
+            "score": { "type": "integer" },
+            "status": { "type": "string", "enum": ["playing", "dead"] }
+          },
+          "required": ["uid", "name", "score", "status"]
+        },
+        "player2": { 
+          "type": "object",
+          "properties": {
+            "uid": { "type": "string" },
+            "name": { "type": "string" },
+            "score": { "type": "integer" },
+            "status": { "type": "string", "enum": ["playing", "dead"] }
+          },
+          "required": ["uid", "name", "score", "status"]
+        },
+        "winner": { "type": "string" }
+      },
+      "required": ["status", "createdAt", "player1"]
     }
   },
   "firestore": {
@@ -61,6 +92,10 @@
     "/checkIn/{userId}": {
       "schema": "CheckIn",
       "description": "User daily check-in data"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Multiplayer match data"
     }
   }
 }

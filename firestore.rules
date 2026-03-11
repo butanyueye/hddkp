@@ -99,6 +99,24 @@ service cloud.firestore {
              isPositiveNumber('checkInCount');
     }
 
+    function isValidPlayerObj(player) {
+      return player is map &&
+             player.keys().hasAll(['uid', 'name', 'score', 'status']) &&
+             player.uid is string && player.uid.size() > 0 && player.uid.size() <= 100 &&
+             player.name is string && player.name.size() <= 100 &&
+             player.score is number && player.score >= 0 &&
+             player.status in ['playing', 'dead'];
+    }
+
+    function isValidMatch(data) {
+      return hasRequiredFields(['status', 'createdAt', 'player1']) &&
+             data.status in ['waiting', 'playing', 'finished'] &&
+             data.createdAt is timestamp &&
+             isValidPlayerObj(data.player1) &&
+             (!('player2' in data) || data.player2 == null || isValidPlayerObj(data.player2)) &&
+             (!('winner' in data) || data.winner == null || data.winner is string);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -127,6 +145,13 @@ service cloud.firestore {
     match /checkIn/{userId} {
       // Only the owner can read/create/update their own check-in data
       allow read, create, update: if isOwner(userId) && isValidCheckIn(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /matches/{matchId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidMatch(request.resource.data) && request.resource.data.player1.uid == request.auth.uid;
+      allow update: if isAuthenticated() && isValidMatch(request.resource.data);
       allow delete: if false;
     }
 

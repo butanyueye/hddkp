@@ -25,7 +25,10 @@ import {
   getDoc,
   serverTimestamp,
   getDocFromServer,
-  Timestamp
+  Timestamp,
+  runTransaction,
+  getDocs,
+  where
 } from 'firebase/firestore';
 
 const GRAVITY = 0.8;
@@ -322,6 +325,17 @@ function GameContent() {
   const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj'>('hdd');
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [checkInCount, setCheckInCount] = useState(0);
+  const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
+  const [checkInMessage, setCheckInMessage] = useState('');
+  
+  // Multiplayer state
+  const [matchState, setMatchState] = useState<'none' | 'matching' | 'playing' | 'finished'>('none');
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [opponent, setOpponent] = useState<{ name: string, score: number, status: string } | null>(null);
+  const [matchResult, setMatchResult] = useState<'win' | 'lose' | 'draw' | null>(null);
+  const [isMultiplayer, setIsMultiplayer] = useState(false);
+  const [matchMessage, setMatchMessage] = useState('');
   
   const playerRef = useRef<Player>({ 
     x: 80, y: 0, width: 60, height: 120, vy: 0, 
@@ -408,6 +422,41 @@ function GameContent() {
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
         }
+
+        // Fetch check-in data
+        try {
+          const checkInDoc = await getDoc(doc(db, 'checkIn', u.uid));
+          if (checkInDoc.exists()) {
+            const data = checkInDoc.data();
+            const lastCheckInDate = data.lastCheckIn?.toDate();
+            const count = data.checkInCount || 0;
+            
+            if (lastCheckInDate) {
+              const today = new Date();
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              const isToday = lastCheckInDate.toDateString() === today.toDateString();
+              const isYesterday = lastCheckInDate.toDateString() === yesterday.toDateString();
+              
+              setHasCheckedInToday(isToday);
+              
+              if (isToday || isYesterday) {
+                setCheckInCount(count);
+              } else {
+                setCheckInCount(0);
+              }
+            } else {
+              setCheckInCount(0);
+              setHasCheckedInToday(false);
+            }
+          } else {
+            setCheckInCount(0);
+            setHasCheckedInToday(false);
+          }
+        } catch (error) {
+          console.error("Failed to fetch checkIn data", error);
+        }
       } else {
         // Reset to local or zero
         setHighScore(Number(localStorage.getItem('highScore')) || 0);
@@ -486,27 +535,36 @@ function GameContent() {
 
   const handleCheckIn = async () => {
     if (!user) {
-      setAuthError('请先登录');
+      setCheckInMessage('请先登录');
+      setTimeout(() => setCheckInMessage(''), 3000);
       return;
     }
 
-    const today = new Date().toDateString();
-    const lastCheckIn = localStorage.getItem(`lastCheckInDate_${user.uid}`);
-
-    if (lastCheckIn === today) {
-      setAuthError('今天已经签到过了');
+    if (hasCheckedInToday) {
+      setCheckInMessage('今天已经签到过了，请明天再来！');
+      setTimeout(() => setCheckInMessage(''), 3000);
       return;
     }
 
-    // Perform check-in
+    const newCount = (checkInCount % 7) + 1;
     const newDiamonds = diamonds + 666;
+    
     setDiamonds(newDiamonds);
-    await setDoc(doc(db, 'users', user.uid), { diamonds: newDiamonds }, { merge: true });
-    
-    // Save check-in date to localStorage
-    localStorage.setItem(`lastCheckInDate_${user.uid}`, today);
-    
-    setShowCheckInModal(false);
+    setCheckInCount(newCount);
+    setHasCheckedInToday(true);
+    setCheckInMessage('签到成功！获得 666 钻石💎');
+    setTimeout(() => setCheckInMessage(''), 3000);
+
+    try {
+      await setDoc(doc(db, 'users', user.uid), { diamonds: newDiamonds }, { merge: true });
+      await setDoc(doc(db, 'checkIn', user.uid), {
+        userId: user.uid,
+        lastCheckIn: serverTimestamp(),
+        checkInCount: newCount
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `checkIn/${user.uid}`);
+    }
   };
 
   const logout = async () => {
@@ -537,6 +595,141 @@ function GameContent() {
       }
     }
   }, [achievements, user]);
+
+  const createNewMatch = async () => {
+    if (!user) return;
+    try {
+      const newMatchRef = doc(collection(db, 'matches'));
+      await setDoc(newMatchRef, {
+        status: 'waiting',
+        createdAt: serverTimestamp(),
+        player1: {
+          uid: user.uid,
+          name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+          score: 0,
+          status: 'playing'
+        }
+      });
+      setMatchId(newMatchRef.id);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'matches');
+      setMatchState('none');
+      setIsMultiplayer(false);
+    }
+  };
+
+  const startMatchmaking = async () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    setMatchState('matching');
+    setIsMultiplayer(true);
+    setMatchResult(null);
+    setOpponent(null);
+    
+    try {
+      const q = query(collection(db, 'matches'), where('status', '==', 'waiting'), limit(1));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const matchDoc = querySnapshot.docs[0];
+        const matchRef = doc(db, 'matches', matchDoc.id);
+        
+        try {
+          await runTransaction(db, async (transaction) => {
+            const sfDoc = await transaction.get(matchRef);
+            if (!sfDoc.exists() || sfDoc.data().status !== 'waiting') {
+              throw new Error("Match no longer available");
+            }
+            
+            transaction.update(matchRef, {
+              status: 'playing',
+              player2: {
+                uid: user.uid,
+                name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+                score: 0,
+                status: 'playing'
+              }
+            });
+          });
+          setMatchId(matchDoc.id);
+        } catch (e) {
+          console.log("Transaction failed: ", e);
+          createNewMatch();
+        }
+      } else {
+        createNewMatch();
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'matches');
+      setMatchState('none');
+      setIsMultiplayer(false);
+    }
+  };
+
+  const updateMatchScore = useCallback(async (currentScore: number) => {
+    if (!isMultiplayer || !matchId || !user || !opponent) return;
+    try {
+      const matchRef = doc(db, 'matches', matchId);
+      // We can determine if we are player1 or player2 based on the opponent state
+      // But actually, we need to know our own key.
+      // Let's just use the current data from the snapshot if possible, or we can fetch it once.
+      // Since we don't have our playerKey stored, we can fetch it or store it.
+      // Let's just fetch it for now, or use the fact that if opponent is player2, we are player1.
+      const docSnap = await getDoc(matchRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const isPlayer1 = data.player1.uid === user.uid;
+        const playerKey = isPlayer1 ? 'player1' : 'player2';
+        await setDoc(matchRef, {
+          [playerKey]: { ...data[playerKey], score: currentScore }
+        }, { merge: true });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isMultiplayer, matchId, user, opponent]);
+
+  const finishMatch = useCallback(async (finalScore: number) => {
+    if (!isMultiplayer || !matchId || !user) return;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const matchRef = doc(db, 'matches', matchId);
+        const sfDoc = await transaction.get(matchRef);
+        if (!sfDoc.exists()) return;
+        
+        const data = sfDoc.data();
+        const isPlayer1 = data.player1.uid === user.uid;
+        const playerKey = isPlayer1 ? 'player1' : 'player2';
+        const oppKey = isPlayer1 ? 'player2' : 'player1';
+        
+        const newData = {
+          ...data,
+          [playerKey]: {
+            ...data[playerKey],
+            status: 'dead',
+            score: finalScore
+          }
+        };
+        
+        if (newData[oppKey] && newData[oppKey].status === 'dead') {
+          newData.status = 'finished';
+          if (newData.player1.score > newData.player2.score) {
+            newData.winner = newData.player1.uid;
+          } else if (newData.player2.score > newData.player1.score) {
+            newData.winner = newData.player2.uid;
+          } else {
+            newData.winner = 'draw';
+          }
+        }
+        
+        transaction.update(matchRef, newData);
+      });
+    } catch (e) {
+      console.error("Match finish failed", e);
+    }
+  }, [isMultiplayer, matchId, user]);
 
   const updateLeaderboard = useCallback(async (finalScore: number) => {
     if (!user) {
@@ -604,6 +797,46 @@ function GameContent() {
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
   }, [difficulty, selectedCharacter]);
 
+  // --- Match Real-time Sync ---
+  useEffect(() => {
+    if (!matchId || !user) return;
+    
+    const unsubscribe = onSnapshot(doc(db, 'matches', matchId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        const isPlayer1 = data.player1.uid === user.uid;
+        const oppData = isPlayer1 ? data.player2 : data.player1;
+        const myData = isPlayer1 ? data.player1 : data.player2;
+        
+        if (oppData) {
+          setOpponent(oppData);
+        }
+        
+        if (data.status === 'playing' && matchState === 'matching') {
+          // Match found, start game!
+          setMatchState('playing');
+          startGame();
+        }
+        
+        if (data.status === 'finished') {
+          setMatchState('finished');
+          if (data.winner === user.uid) {
+            setMatchResult('win');
+          } else if (data.winner === 'draw') {
+            setMatchResult('draw');
+          } else {
+            setMatchResult('lose');
+          }
+        }
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `matches/${matchId}`);
+    });
+    
+    return () => unsubscribe();
+  }, [matchId, user, matchState, startGame]);
+
   const activateHjdjSkill = useCallback(() => {
     if (selectedCharacter === 'hjdj' && playerRef.current && playerRef.current.hjdjSkillCooldown <= 0) {
       playerRef.current.hjdjSkillActive = 600; // 10 seconds
@@ -611,6 +844,19 @@ function GameContent() {
       playSound('score');
     }
   }, [selectedCharacter]);
+
+  // --- Match Score Sync ---
+  const lastSyncedScoreRef = useRef(0);
+  useEffect(() => {
+    if (isMultiplayer && matchState === 'playing') {
+      if (score - lastSyncedScoreRef.current >= 5) {
+        updateMatchScore(score);
+        lastSyncedScoreRef.current = score;
+      }
+    } else if (matchState === 'none' || matchState === 'matching') {
+      lastSyncedScoreRef.current = 0;
+    }
+  }, [score, isMultiplayer, matchState, updateMatchScore]);
 
   // --- BGM Control ---
   useEffect(() => {
@@ -1141,6 +1387,9 @@ function GameContent() {
               return newHigh;
             });
             updateLeaderboard(finalScore);
+            if (isMultiplayer) {
+              finishMatch(finalScore);
+            }
             createParticles(player.x + player.width/2, player.y + player.height/2, '#ef4444', 50);
             draw();
             return;
@@ -1376,7 +1625,7 @@ function GameContent() {
     }
 
     return () => cancelAnimationFrame(animationRef.current);
-  }, [gameState, playerImage, score, createParticles, updateLeaderboard]);
+  }, [gameState, playerImage, score, createParticles, updateLeaderboard, isMultiplayer, updateMatchScore, finishMatch]);
 
   useEffect(() => {
     const img = new Image();
@@ -1392,37 +1641,48 @@ function GameContent() {
         
         {/* Check-in Modal */}
         {showCheckInModal && (
-          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="relative bg-slate-900 rounded-3xl p-6 border border-slate-700 w-full max-w-md shadow-2xl overflow-hidden -mt-40">
-              <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold text-amber-400 mb-1">内测送钻石</h2>
+          <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center -mt-10">
+              <div className="w-full flex justify-between items-center mb-4">
+                <h2 className="text-3xl font-black text-[#e65100]">签到福利</h2>
+                <button onClick={() => setShowCheckInModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
+              </div>
+              
+              <div className="w-full bg-[#ffcc80]/30 py-2 px-4 rounded-xl border-2 border-[#ffb300]/30 mb-6 text-center">
+                <p className="text-[#d84315] font-bold text-sm">内测送钻石，每天领取 <span className="text-blue-600 font-black text-lg">666</span> 💎</p>
               </div>
 
-              <div className="flex justify-between items-center mb-8 px-2">
-                {[...Array(7)].map((_, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2">
-                    <div className={`w-10 h-14 rounded-full flex items-center justify-center relative transition-all duration-300 ${i < 3 ? 'bg-amber-500 shadow-lg' : 'bg-slate-800'}`}>
-                      <div className="absolute -top-6 text-slate-400 font-bold text-xs">{i + 1}</div>
-                      <div className="w-8 h-10 bg-slate-700 rounded-sm border border-slate-600 flex flex-col items-center justify-center">
-                        <span className="text-[10px] text-amber-400 font-bold">💎</span>
-                        <span className="text-[8px] text-slate-200 font-bold">666</span>
-                      </div>
+              <div className="grid grid-cols-4 gap-2 w-full mb-6">
+                {[...Array(7)].map((_, i) => {
+                  const isCheckedIn = i < checkInCount;
+                  return (
+                    <div key={i} className={`flex flex-col items-center justify-center p-2 rounded-2xl border-2 ${i === 6 ? 'col-span-2 bg-gradient-to-br from-[#ffe082] to-[#ffca28] border-[#ff8f00]' : 'bg-white border-[#ffe082]'} shadow-sm relative overflow-hidden`}>
+                      <div className="text-[#e65100] font-black text-xs mb-1">第{i + 1}天</div>
+                      <div className="text-xl drop-shadow-sm">💎</div>
+                      <div className="text-blue-600 font-black text-sm mt-1">666</div>
+                      {isCheckedIn && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
+                          <span className="text-3xl drop-shadow-md">✅</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {checkInMessage && (
+                <div className="w-full bg-black/60 text-white font-bold text-sm py-2 px-4 rounded-xl mb-4 text-center animate-pulse">
+                  {checkInMessage}
+                </div>
+              )}
 
               <button 
                 onClick={handleCheckIn}
-                className="w-full py-3 bg-slate-700 text-slate-100 rounded-full font-bold text-lg hover:bg-slate-600 transition-all border border-slate-600"
+                disabled={hasCheckedInToday}
+                className={`w-full py-3 rounded-2xl font-black text-xl text-white border-4 border-white transition-transform ${hasCheckedInToday ? 'opacity-50 grayscale cursor-not-allowed shadow-[0_0px_0_#43a047]' : 'shadow-[0_6px_0_#43a047,0_10px_20px_rgba(0,0,0,0.4)] active:translate-y-2 active:shadow-[0_0px_0_#43a047]'}`}
+                style={{ background: 'linear-gradient(to bottom, #a5d6a7, #66bb6a, #4caf50)', textShadow: '1px 1px 0 #2e7d32, -1px -1px 0 #2e7d32, 1px -1px 0 #2e7d32, -1px 1px 0 #2e7d32' }}
               >
-                立即签到
-              </button>
-              <button 
-                onClick={() => setShowCheckInModal(false)}
-                className="w-full py-2 text-slate-500 mt-2 hover:text-slate-300 transition-colors font-bold"
-              >
-                关闭
+                {hasCheckedInToday ? '今日已签到' : '立即签到'}
               </button>
             </div>
           </div>
@@ -1457,8 +1717,11 @@ function GameContent() {
                 <span className="text-blue-400 text-sm">💎</span>
                 <span className="font-mono text-blue-400 font-bold text-lg">{diamonds}</span>
               </div>
-              <div className="bg-black/50 px-4 py-1 rounded-full border border-white/20">
-                <span className="font-mono text-yellow-400 font-bold text-xl">{score}</span>
+              <div className="bg-black/50 px-4 py-1 rounded-full border border-white/20 flex flex-col items-end">
+                <span className="font-mono text-yellow-400 font-bold text-xl leading-none">{score}</span>
+                {isMultiplayer && opponent && (
+                  <span className="font-mono text-red-400 font-bold text-xs mt-1">对手: {opponent.score}</span>
+                )}
               </div>
             </div>
             {/* Power-up Indicators */}
@@ -1720,7 +1983,7 @@ function GameContent() {
                     无尽<br/><span className="text-2xl">模式</span>
                   </button>
                   <button 
-                    onClick={showInstructions}
+                    onClick={startMatchmaking}
                     className="flex-1 py-3 rounded-3xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] leading-tight"
                     style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                   >
@@ -1803,7 +2066,7 @@ function GameContent() {
             </div>
           )}
 
-          {gameState === 'gameover' && (
+          {gameState === 'gameover' && !isMultiplayer && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30">
               <h2 className="text-5xl font-black text-red-500 mb-2 tracking-tighter drop-shadow-lg" style={{ WebkitTextStroke: '1px white' }}>GAME OVER</h2>
               <p className="text-2xl text-white mb-10 font-medium">Score: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
@@ -1825,6 +2088,97 @@ function GameContent() {
                   style={{ background: 'linear-gradient(to bottom, #fff59d, #fbc02d, #f57f17)', textShadow: '2px 2px 0 #e65100, -1px -1px 0 #e65100, 1px -1px 0 #e65100, -1px 1px 0 #e65100' }}
                 >
                   再来一局
+                </button>
+              </div>
+            </div>
+          )}
+
+          {gameState === 'gameover' && isMultiplayer && matchState !== 'finished' && (
+            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30">
+              <h2 className="text-4xl font-black text-white mb-4 tracking-tighter drop-shadow-lg">等待对手结束...</h2>
+              <p className="text-xl text-white/80 mb-8 font-medium">你的最终得分: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
+              <div className="w-16 h-16 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+
+          {/* Matchmaking Modal */}
+          {matchState === 'matching' && (
+            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[70] backdrop-blur-md p-4">
+              <div className="bg-[#1e1b4b] w-full max-w-sm rounded-3xl p-8 border-4 border-[#6366f1] shadow-[0_0_40px_rgba(99,102,241,0.5)] flex flex-col items-center relative overflow-hidden">
+                {/* Animated background elements */}
+                <div className="absolute inset-0 opacity-20">
+                  <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_#818cf8_0%,_transparent_60%)] animate-pulse"></div>
+                </div>
+                
+                <h2 className="text-3xl font-black text-white mb-8 tracking-wider relative z-10" style={{ textShadow: '0 0 10px #818cf8' }}>
+                  寻找对手中...
+                </h2>
+                
+                <div className="relative w-32 h-32 mb-8 z-10">
+                  <div className="absolute inset-0 border-4 border-t-[#818cf8] border-r-transparent border-b-[#818cf8] border-l-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-2 border-4 border-t-transparent border-r-[#c7d2fe] border-b-transparent border-l-[#c7d2fe] rounded-full animate-[spin_1.5s_linear_infinite_reverse]"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-5xl">⚔️</span>
+                  </div>
+                </div>
+                
+                <p className="text-[#c7d2fe] font-medium text-center relative z-10 animate-pulse">
+                  正在为您匹配实力相当的玩家
+                </p>
+                
+                <button 
+                  onClick={() => {
+                    setMatchState('idle');
+                    setIsMultiplayer(false);
+                    // Optionally, delete or update the match document to cancel
+                  }}
+                  className="mt-8 px-8 py-3 rounded-full bg-red-500/20 border-2 border-red-500 text-red-400 font-bold hover:bg-red-500/40 transition-colors relative z-10"
+                >
+                  取消匹配
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Match Result Modal */}
+          {matchState === 'finished' && matchResult && (
+            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[70] backdrop-blur-md p-4">
+              <div className={`w-full max-w-sm rounded-3xl p-8 border-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] flex flex-col items-center relative overflow-hidden ${
+                matchResult === 'win' ? 'bg-[#14532d] border-[#4ade80]' : 
+                matchResult === 'lose' ? 'bg-[#7f1d1d] border-[#f87171]' : 
+                'bg-[#451a03] border-[#fbbf24]'
+              }`}>
+                
+                <h2 className={`text-5xl font-black mb-6 tracking-wider relative z-10 ${
+                  matchResult === 'win' ? 'text-[#4ade80]' : 
+                  matchResult === 'lose' ? 'text-[#f87171]' : 
+                  'text-[#fbbf24]'
+                }`} style={{ textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                  {matchResult === 'win' ? '胜利!' : matchResult === 'lose' ? '失败' : '平局'}
+                </h2>
+                
+                <div className="flex justify-between w-full items-center mb-8 relative z-10 bg-black/30 p-4 rounded-2xl">
+                  <div className="flex flex-col items-center">
+                    <span className="text-white font-bold mb-1">你</span>
+                    <span className="text-3xl font-mono text-yellow-400">{score}</span>
+                  </div>
+                  <div className="text-2xl font-black text-white/50">VS</div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-white font-bold mb-1">对手</span>
+                    <span className="text-3xl font-mono text-yellow-400">{opponent?.score || 0}</span>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setMatchState('idle');
+                    setIsMultiplayer(false);
+                    setGameState('start');
+                  }}
+                  className="w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#e65100,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#e65100] relative z-10"
+                  style={{ background: 'linear-gradient(to bottom, #fff59d, #fbc02d, #f57f17)', textShadow: '2px 2px 0 #e65100, -1px -1px 0 #e65100, 1px -1px 0 #e65100, -1px 1px 0 #e65100' }}
+                >
+                  返回主菜单
                 </button>
               </div>
             </div>
