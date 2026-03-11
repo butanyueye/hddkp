@@ -1392,33 +1392,35 @@ function GameContent() {
         
         {/* Check-in Modal */}
         {showCheckInModal && (
-          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-neutral-900 rounded-3xl p-6 border-4 border-emerald-500 w-full max-w-sm shadow-2xl">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center border-2 border-emerald-500">
-                  <Gift className="text-emerald-400" size={32} />
-                </div>
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="relative bg-slate-900 rounded-3xl p-6 border border-slate-700 w-full max-w-md shadow-2xl overflow-hidden -mt-40">
+              <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold text-amber-400 mb-1">内测送钻石</h2>
               </div>
-              <h2 className="text-2xl font-black text-emerald-400 mb-2 text-center">内测福利大放送</h2>
-              <p className="text-neutral-300 text-center mb-6">连续签到，每天领取 666 钻石！</p>
-              <div className="grid grid-cols-7 gap-1 mb-6">
+
+              <div className="flex justify-between items-center mb-8 px-2">
                 {[...Array(7)].map((_, i) => (
-                  <div key={i} className="bg-neutral-800 rounded-lg p-1 text-center border border-neutral-700">
-                    <div className="text-[10px] text-neutral-400">第{i+1}天</div>
-                    <div className="text-emerald-400 font-bold text-xs">666</div>
-                    <div className="text-blue-400 text-xs">💎</div>
+                  <div key={i} className="flex flex-col items-center gap-2">
+                    <div className={`w-10 h-14 rounded-full flex items-center justify-center relative transition-all duration-300 ${i < 3 ? 'bg-amber-500 shadow-lg' : 'bg-slate-800'}`}>
+                      <div className="absolute -top-6 text-slate-400 font-bold text-xs">{i + 1}</div>
+                      <div className="w-8 h-10 bg-slate-700 rounded-sm border border-slate-600 flex flex-col items-center justify-center">
+                        <span className="text-[10px] text-amber-400 font-bold">💎</span>
+                        <span className="text-[8px] text-slate-200 font-bold">666</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
+
               <button 
                 onClick={handleCheckIn}
-                className="w-full py-3 bg-emerald-500 text-white rounded-full font-bold text-lg hover:bg-emerald-600 transition-all shadow-[0_4px_0_#065f46] active:shadow-none active:translate-y-1"
+                className="w-full py-3 bg-slate-700 text-slate-100 rounded-full font-bold text-lg hover:bg-slate-600 transition-all border border-slate-600"
               >
                 立即签到
               </button>
               <button 
                 onClick={() => setShowCheckInModal(false)}
-                className="w-full py-2 text-neutral-500 mt-2 hover:text-white transition-colors"
+                className="w-full py-2 text-slate-500 mt-2 hover:text-slate-300 transition-colors font-bold"
               >
                 关闭
               </button>
@@ -1635,7 +1637,7 @@ function GameContent() {
               {/* Character & Side Buttons */}
               <div className="flex-1 w-full relative flex items-center justify-center mt-4">
                 {/* Side Buttons */}
-                <div className="absolute left-0 top-1/4 flex flex-col gap-6 z-20">
+                <div className="absolute left-0 top-0 flex flex-col gap-6 z-20">
                   <div className="flex flex-col items-center">
                     <button 
                       onClick={() => setShowCheckInModal(true)}
