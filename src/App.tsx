@@ -155,6 +155,7 @@ interface Player {
   initialDashUsed: boolean;
   hjdjSkillActive: number;
   hjdjSkillCooldown: number;
+  hddSkillTimer: number;
 }
 
 interface Obstacle {
@@ -344,7 +345,8 @@ function GameContent() {
     shield: 0, magnet: 0, doubleScore: 0, 
     dash: 0, invincibility: 0, initialDashUsed: true,
     hjdjSkillActive: 0,
-    hjdjSkillCooldown: 0
+    hjdjSkillCooldown: 0,
+    hddSkillTimer: 420
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
@@ -806,11 +808,12 @@ function GameContent() {
       isJumping: false, jumps: 0, 
       isSliding: false, slideTimer: 0,
       shield: 0, magnet: 0, doubleScore: 0, 
-      dash: selectedCharacter === 'santa' ? 600 : 0,
+      dash: selectedCharacter === 'santa' ? 900 : 0,
       invincibility: 0,
       initialDashUsed: selectedCharacter !== 'santa',
       hjdjSkillActive: 0,
-      hjdjSkillCooldown: 0
+      hjdjSkillCooldown: 0,
+      hddSkillTimer: 420
     };
     
     obstaclesRef.current = [];
@@ -998,7 +1001,11 @@ function GameContent() {
       if (type === 'shield') {
         playerRef.current.shield = 1; // Infinite until hit
       } else {
-        playerRef.current[type] = POWERUP_CONFIG[type].duration;
+        let duration = POWERUP_CONFIG[type].duration;
+        if (type === 'dash' && selectedCharacter === 'santa') {
+          duration += 300; // 5 seconds extra
+        }
+        playerRef.current[type] = duration;
       }
       createParticles(playerRef.current.x + playerRef.current.width / 2, playerRef.current.y + playerRef.current.height / 2, POWERUP_CONFIG[type].color, 20);
       playSound('score');
@@ -1123,9 +1130,37 @@ function GameContent() {
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
       if (player.dash > 0) {
         player.dash -= dt;
-        if (player.dash <= 0 && !player.initialDashUsed && selectedCharacter === 'santa') {
-          player.shield = 1; // Infinite until hit
-          player.initialDashUsed = true;
+        if (player.dash <= 0) {
+          // Clear obstacles
+          obstaclesRef.current.forEach(obs => {
+            createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ef4444', 20);
+          });
+          obstaclesRef.current.length = 0;
+
+          if (!player.initialDashUsed && selectedCharacter === 'santa') {
+            player.shield = 1; // Infinite until hit
+            player.initialDashUsed = true;
+          }
+        }
+      }
+
+      if (selectedCharacter === 'hdd') {
+        player.hddSkillTimer -= dt;
+        if (player.hddSkillTimer <= 0) {
+          player.hddSkillTimer = 420; // 7 seconds
+          const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
+          const randomType = types[Math.floor(Math.random() * types.length)];
+          
+          setInventory(prev => {
+            const newInv = { ...prev, [randomType]: prev[randomType] + 1 };
+            if (user) {
+              setDoc(doc(db, 'users', user.uid), { inventory: newInv }, { merge: true }).catch(err => console.error(err));
+            }
+            return newInv;
+          });
+          
+          createParticles(player.x + player.width/2, player.y, POWERUP_CONFIG[randomType].color, 30);
+          playSound('score');
         }
       }
 
@@ -1305,7 +1340,11 @@ function GameContent() {
           if (pu.type === 'shield') {
             player.shield = 1; // Infinite until hit
           } else {
-            player[pu.type] = POWERUP_CONFIG[pu.type].duration;
+            let duration = POWERUP_CONFIG[pu.type].duration;
+            if (pu.type === 'dash' && selectedCharacter === 'santa') {
+              duration += 300; // 5 seconds extra
+            }
+            player[pu.type] = duration;
           }
           createParticles(pu.x, pu.y, POWERUP_CONFIG[pu.type].color, 20);
           powerUps.splice(i, 1);
@@ -2044,15 +2083,15 @@ function GameContent() {
                       id: 'hdd', 
                       name: '呼大帝', 
                       img: hddImg, 
-                      skill: '技能：废物', 
-                      desc: '无技能，纯粹的挑战者。' 
+                      skill: '技能：狗运', 
+                      desc: '每7秒随机获得一种道具。' 
                     },
                     { 
                       id: 'santa', 
                       name: '圣诞老呼', 
                       img: santaImg, 
                       skill: '技能：圣诞麋鹿的眷顾', 
-                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺10秒，并在冲刺结束后获得永久护盾。' 
+                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺15秒，并在冲刺结束后获得永久护盾。冲刺时间增长5秒。' 
                     },
                     { 
                       id: 'hjdj', 
