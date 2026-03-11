@@ -143,8 +143,10 @@ service cloud.firestore {
     }
 
     match /checkIn/{userId} {
-      // Only the owner can read/create/update their own check-in data
-      allow read, create, update: if isOwner(userId) && isValidCheckIn(request.resource.data);
+      // Only the owner can read their own check-in data
+      allow read: if isOwner(userId);
+      // Only the owner can create/update their own check-in data
+      allow create, update: if isOwner(userId) && isValidCheckIn(request.resource.data);
       allow delete: if false;
     }
 

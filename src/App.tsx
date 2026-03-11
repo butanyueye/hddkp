@@ -330,9 +330,9 @@ function GameContent() {
   const [checkInMessage, setCheckInMessage] = useState('');
   
   // Multiplayer state
-  const [matchState, setMatchState] = useState<'none' | 'matching' | 'playing' | 'finished'>('none');
+  const [matchState, setMatchState] = useState<'none' | 'matching' | 'vs' | 'playing' | 'finished'>('none');
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [opponent, setOpponent] = useState<{ name: string, score: number, status: string } | null>(null);
+  const [opponent, setOpponent] = useState<{ name: string, score: number, status: string, character?: string } | null>(null);
   const [matchResult, setMatchResult] = useState<'win' | 'lose' | 'draw' | null>(null);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [matchMessage, setMatchMessage] = useState('');
@@ -607,13 +607,15 @@ function GameContent() {
           uid: user.uid,
           name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
           score: 0,
-          status: 'playing'
+          status: 'playing',
+          character: selectedCharacter
         }
       });
       setMatchId(newMatchRef.id);
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'matches');
       setMatchState('none');
+      setMatchId(null);
       setIsMultiplayer(false);
     }
   };
@@ -670,7 +672,8 @@ function GameContent() {
                 uid: user.uid,
                 name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
                 score: 0,
-                status: 'playing'
+                status: 'playing',
+                character: selectedCharacter
               }
             });
           });
@@ -685,6 +688,7 @@ function GameContent() {
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, 'matches');
       setMatchState('none');
+      setMatchId(null);
       setIsMultiplayer(false);
     }
   };
@@ -840,9 +844,12 @@ function GameContent() {
         }
         
         if (data.status === 'playing' && matchStateRef.current === 'matching') {
-          // Match found, start game!
-          setMatchState('playing');
-          startGame();
+          // Match found, show VS screen!
+          setMatchState('vs');
+          setTimeout(() => {
+            setMatchState('playing');
+            startGame();
+          }, 3000);
         }
         
         if (data.status === 'finished') {
@@ -2128,6 +2135,48 @@ function GameContent() {
             </div>
           )}
 
+          {/* VS Modal */}
+          {matchState === 'vs' && (
+            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[70] backdrop-blur-md p-4">
+              <div className="w-full max-w-md flex items-center justify-between relative">
+                {/* Player 1 (You) */}
+                <div className="flex flex-col items-center z-10 animate-slideInLeft">
+                  <div className="w-32 h-32 rounded-full border-4 border-blue-500 overflow-hidden bg-white/10 mb-4 shadow-[0_0_30px_rgba(59,130,246,0.5)]">
+                    <img 
+                      src={selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : hjdjImg)} 
+                      alt="You" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <span className="text-2xl font-black text-white bg-blue-600 px-4 py-1 rounded-full shadow-lg">
+                    {user?.displayName || '你'}
+                  </span>
+                </div>
+
+                {/* VS Text */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 animate-[pulse_1s_infinite]">
+                  <span className="text-6xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-yellow-300 to-red-600 drop-shadow-[0_0_20px_rgba(239,68,68,0.8)]" style={{ WebkitTextStroke: '2px white' }}>
+                    VS
+                  </span>
+                </div>
+
+                {/* Player 2 (Opponent) */}
+                <div className="flex flex-col items-center z-10 animate-slideInRight">
+                  <div className="w-32 h-32 rounded-full border-4 border-red-500 overflow-hidden bg-white/10 mb-4 shadow-[0_0_30px_rgba(239,68,68,0.5)]">
+                    <img 
+                      src={opponent?.character === 'santa' ? santaImg : (opponent?.character === 'hjdj' ? hjdjImg : hddImg)} 
+                      alt="Opponent" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <span className="text-2xl font-black text-white bg-red-600 px-4 py-1 rounded-full shadow-lg">
+                    {opponent?.name || '对手'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Matchmaking Modal */}
           {matchState === 'matching' && (
             <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[70] backdrop-blur-md p-4">
@@ -2155,7 +2204,8 @@ function GameContent() {
                 
                 <button 
                   onClick={() => {
-                    setMatchState('idle');
+                    setMatchState('none');
+                    setMatchId(null);
                     setIsMultiplayer(false);
                     // Optionally, delete or update the match document to cancel
                   }}
@@ -2198,7 +2248,8 @@ function GameContent() {
                 
                 <button 
                   onClick={() => {
-                    setMatchState('idle');
+                    setMatchState('none');
+                    setMatchId(null);
                     setIsMultiplayer(false);
                     setGameState('start');
                   }}

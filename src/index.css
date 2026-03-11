@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@theme {
+  --animate-slideInLeft: slideInLeft 0.5s ease-out;
+  --animate-slideInRight: slideInRight 0.5s ease-out;
+}
