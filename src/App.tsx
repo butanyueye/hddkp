@@ -4,6 +4,8 @@ import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
 import { hjdjBase64 as hjdjImg } from './hjdjBase64';
 import { hjdjSkillBase64 as hjdjSkillImg } from './hjdjSkillBase64';
+import hzImg from './hz.png';
+import hzSkillImg from './hzskill.png';
 import { auth, db } from './firebase';
 import { 
   onAuthStateChanged, 
@@ -28,7 +30,8 @@ import {
   Timestamp,
   runTransaction,
   getDocs,
-  where
+  where,
+  deleteDoc
 } from 'firebase/firestore';
 
 const GRAVITY = 0.8;
@@ -155,6 +158,10 @@ interface Player {
   initialDashUsed: boolean;
   hjdjSkillActive: number;
   hjdjSkillCooldown: number;
+  hzSkillCharges: number;
+  hzSkillActive: number;
+  hzSkillSprint: number;
+  hzPassiveCharges: number;
   hddSkillTimer: number;
 }
 
@@ -323,7 +330,7 @@ function GameContent() {
   
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj'>('hdd');
+  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz'>('hdd');
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [checkInCount, setCheckInCount] = useState(0);
@@ -346,6 +353,10 @@ function GameContent() {
     dash: 0, invincibility: 0, initialDashUsed: true,
     hjdjSkillActive: 0,
     hjdjSkillCooldown: 0,
+    hzSkillCharges: 0,
+    hzSkillActive: 0,
+    hzSkillSprint: 0,
+    hzPassiveCharges: 3,
     hddSkillTimer: 420
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
@@ -622,18 +633,31 @@ function GameContent() {
     }
   };
 
-  const startMatchmaking = async () => {
+  const startMatchmaking = async (retryCount = 0) => {
     if (!user) {
       setShowAuthModal(true);
       return;
     }
+    
+    // Reset state
     setMatchState('matching');
+    matchStateRef.current = 'matching';
     setIsMultiplayer(true);
     setMatchResult(null);
     setOpponent(null);
+    setMatchId(null);
     
     try {
-      // Query for waiting matches, limit to 10 to avoid large reads
+      // Add a small random jitter to reduce simultaneous creation collisions
+      // Only add jitter if not a retry
+      if (retryCount === 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
+      }
+
+      // Check if we are still in matching state after jitter
+      if (matchStateRef.current !== 'matching') return;
+
+      // Query for waiting matches
       const q = query(
         collection(db, 'matches'), 
         where('status', '==', 'waiting'), 
@@ -641,7 +665,6 @@ function GameContent() {
       );
       const querySnapshot = await getDocs(q);
       
-      // Filter locally to avoid complex composite index requirements
       const validDocs = querySnapshot.docs.filter(doc => {
         const data = doc.data();
         const isNotMe = data.player1?.uid !== user.uid;
@@ -659,6 +682,7 @@ function GameContent() {
         });
         
         const matchDoc = validDocs[0];
+        console.log("Matchmaking: Found existing match", matchDoc.id);
         const matchRef = doc(db, 'matches', matchDoc.id);
         
         try {
@@ -679,15 +703,42 @@ function GameContent() {
               }
             });
           });
+          
+          console.log("Matchmaking: Successfully joined match", matchDoc.id);
           setMatchId(matchDoc.id);
         } catch (e) {
-          console.log("Transaction failed: ", e);
-          createNewMatch();
+          console.log("Matchmaking: Transaction failed, retrying...", e);
+          if (retryCount < 3) {
+            setTimeout(() => startMatchmaking(retryCount + 1), 500);
+          } else {
+            console.log("Matchmaking: Transaction failed after retries, creating new match");
+            createNewMatch();
+          }
         }
       } else {
-        createNewMatch();
+        console.log("Matchmaking: No existing match found, creating new match");
+        // No match found, but wait a tiny bit more to see if one appears (double check)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (matchStateRef.current !== 'matching') return;
+        
+        const secondCheck = await getDocs(q);
+        const stillNoMatches = secondCheck.docs.filter(doc => {
+          const data = doc.data();
+          return data.player1?.uid !== user.uid && 
+                 data.status === 'waiting' && 
+                 (Date.now() - (data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now())) < 30000;
+        }).length === 0;
+
+        if (stillNoMatches) {
+          createNewMatch();
+        } else {
+          console.log("Matchmaking: Match appeared during double check, retrying");
+          // A match appeared! Retry the whole process once.
+          startMatchmaking(retryCount + 1);
+        }
       }
     } catch (e) {
+      console.error("Matchmaking error:", e);
       handleFirestoreError(e, OperationType.LIST, 'matches');
       setMatchState('none');
       setMatchId(null);
@@ -696,27 +747,26 @@ function GameContent() {
   };
 
   const updateMatchScore = useCallback(async (currentScore: number) => {
-    if (!isMultiplayer || !matchId || !user || !opponent) return;
+    if (!isMultiplayer || !matchId || !user || !matchDataRef.current) return;
     try {
       const matchRef = doc(db, 'matches', matchId);
-      // We can determine if we are player1 or player2 based on the opponent state
-      // But actually, we need to know our own key.
-      // Let's just use the current data from the snapshot if possible, or we can fetch it once.
-      // Since we don't have our playerKey stored, we can fetch it or store it.
-      // Let's just fetch it for now, or use the fact that if opponent is player2, we are player1.
-      const docSnap = await getDoc(matchRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const isPlayer1 = data.player1.uid === user.uid;
-        const playerKey = isPlayer1 ? 'player1' : 'player2';
-        await setDoc(matchRef, {
-          [playerKey]: { ...data[playerKey], score: currentScore }
-        }, { merge: true });
-      }
+      const data = matchDataRef.current;
+      const isPlayer1 = data.player1.uid === user.uid;
+      const playerKey = isPlayer1 ? 'player1' : 'player2';
+      
+      // Update locally first to avoid waiting for snapshot
+      matchDataRef.current = {
+        ...data,
+        [playerKey]: { ...data[playerKey], score: currentScore }
+      };
+
+      await setDoc(matchRef, {
+        [playerKey]: { ...data[playerKey], score: currentScore }
+      }, { merge: true });
     } catch (e) {
-      console.error(e);
+      console.error("Score sync error:", e);
     }
-  }, [isMultiplayer, matchId, user, opponent]);
+  }, [isMultiplayer, matchId, user]);
 
   const finishMatch = useCallback(async (finalScore: number) => {
     if (!isMultiplayer || !matchId || !user) return;
@@ -813,6 +863,10 @@ function GameContent() {
       initialDashUsed: selectedCharacter !== 'santa',
       hjdjSkillActive: 0,
       hjdjSkillCooldown: 0,
+      hzSkillCharges: 0,
+      hzSkillActive: 0,
+      hzSkillSprint: 0,
+      hzPassiveCharges: 3,
       hddSkillTimer: 420
     };
     
@@ -825,6 +879,7 @@ function GameContent() {
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
   }, [difficulty, selectedCharacter]);
 
+  const matchDataRef = useRef<any>(null);
   const matchStateRef = useRef(matchState);
   useEffect(() => {
     matchStateRef.current = matchState;
@@ -832,30 +887,38 @@ function GameContent() {
 
   // --- Match Real-time Sync ---
   useEffect(() => {
-    if (!matchId || !user) return;
+    if (!matchId || !user) {
+      matchDataRef.current = null;
+      return;
+    }
     
     const unsubscribe = onSnapshot(doc(db, 'matches', matchId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        console.log("Match Sync: Received update", matchId, data.status);
+        matchDataRef.current = data;
         
         const isPlayer1 = data.player1.uid === user.uid;
         const oppData = isPlayer1 ? data.player2 : data.player1;
-        const myData = isPlayer1 ? data.player1 : data.player2;
         
         if (oppData) {
           setOpponent(oppData);
         }
         
         if (data.status === 'playing' && matchStateRef.current === 'matching') {
+          console.log("Match Sync: Match found, transitioning to playing", matchId);
           // Match found, show VS screen!
           setMatchState('vs');
           setTimeout(() => {
-            setMatchState('playing');
-            startGame();
+            if (matchStateRef.current === 'vs') {
+              setMatchState('playing');
+              startGame();
+            }
           }, 3000);
         }
         
-        if (data.status === 'finished') {
+        if (data.status === 'finished' && matchStateRef.current !== 'finished') {
+          console.log("Match Sync: Match finished", matchId);
           setMatchState('finished');
           if (data.winner === user.uid) {
             setMatchResult('win');
@@ -865,13 +928,40 @@ function GameContent() {
             setMatchResult('lose');
           }
         }
+      } else {
+        console.log("Match Sync: Match document does not exist", matchId);
       }
     }, (error) => {
+      console.error("Match Sync: Error", error);
       handleFirestoreError(error, OperationType.GET, `matches/${matchId}`);
     });
     
     return () => unsubscribe();
   }, [matchId, user, startGame]);
+
+  // --- Matchmaking Timeout ---
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (matchState === 'matching') {
+      timeout = setTimeout(() => {
+        if (matchStateRef.current === 'matching') {
+          setMatchMessage('匹配超时，请重试');
+          setMatchState('none');
+          setMatchId(null);
+          setIsMultiplayer(false);
+        }
+      }, 30000); // 30 seconds timeout
+    }
+    return () => clearTimeout(timeout);
+  }, [matchState]);
+
+  const activateHzSkill = useCallback(() => {
+    if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 3) {
+      playerRef.current.hzSkillCharges -= 3;
+      playerRef.current.hzSkillActive = 600; // 10 seconds duration for shield
+      playSound('score');
+    }
+  }, [selectedCharacter]);
 
   const activateHjdjSkill = useCallback(() => {
     if (selectedCharacter === 'hjdj' && playerRef.current && playerRef.current.hjdjSkillCooldown <= 0) {
@@ -1127,6 +1217,8 @@ function GameContent() {
       if (player.doubleScore > 0) player.doubleScore -= dt;
       if (player.invincibility > 0) player.invincibility -= dt;
       if (player.hjdjSkillActive > 0) player.hjdjSkillActive -= dt;
+      if (player.hzSkillActive > 0) player.hzSkillActive -= dt;
+      if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
       if (player.dash > 0) {
         player.dash -= dt;
@@ -1232,7 +1324,7 @@ function GameContent() {
       const prevFrameCount = frameCountRef.current;
       frameCountRef.current += dt;
       
-      const currentSpeed = speedRef.current * (player.dash > 0 || player.hjdjSkillActive > 0 ? 3 : 1);
+      const currentSpeed = speedRef.current * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
 
       if (Math.floor(frameCountRef.current / 600) > Math.floor(prevFrameCount / 600)) {
         speedRef.current += 0.5;
@@ -1336,6 +1428,12 @@ function GameContent() {
             player.y < pu.y + pu.height &&
             player.y + player.height > pu.y) {
           pu.collected = true;
+          
+          // Huzi skill charge
+          if (selectedCharacter === 'hz' && player.hzSkillCharges < 3) {
+            player.hzSkillCharges += 1;
+          }
+
           playSound('score');
           if (pu.type === 'shield') {
             player.shield = 1; // Infinite until hit
@@ -1443,10 +1541,22 @@ function GameContent() {
               return newScore;
             });
             continue;
-          } else if (player.shield > 0) {
-            player.shield = 0;
+          } else if (player.shield > 0 || player.hzSkillActive > 0) {
+            if (player.hzSkillActive > 0) {
+              player.hzSkillActive = 0;
+              player.hzSkillSprint = 300; // 5 seconds sprint
+              playSound('score');
+            } else {
+              player.shield = 0;
+            }
             player.invincibility = 300; // 5 seconds at 60fps
             createParticles(player.x + player.width/2, player.y + player.height/2, '#34d399', 30);
+            obstacles.splice(i, 1);
+            continue;
+          } else if (selectedCharacter === 'hz' && player.hzPassiveCharges > 0) {
+            player.hzPassiveCharges -= 1;
+            player.invincibility = 120; // 2 seconds invincibility after passive trigger
+            createParticles(player.x + player.width/2, player.y + player.height/2, '#60a5fa', 30);
             obstacles.splice(i, 1);
             continue;
           } else {
@@ -1629,12 +1739,17 @@ function GameContent() {
       }
 
       // Shield Effect
-      if (player.shield > 0) {
-        ctx.strokeStyle = '#34d399';
+      if (player.shield > 0 || player.hzSkillActive > 0) {
+        ctx.strokeStyle = player.hzSkillActive > 0 ? '#60a5fa' : '#34d399';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.arc(player.x + player.width/2, player.y + player.height/2, player.height/1.5, 0, Math.PI * 2);
         ctx.stroke();
+        
+        if (player.hzSkillActive > 0) {
+          ctx.fillStyle = 'rgba(96, 165, 250, 0.2)';
+          ctx.fill();
+        }
       }
 
       if (playerImage) {
@@ -1799,24 +1914,39 @@ function GameContent() {
             </div>
             {/* Power-up Indicators */}
             <div className="flex flex-col gap-1">
-              {playerRef.current.shield > 0 && (
+              {playerRef.current?.shield > 0 && (
                 <div className="bg-emerald-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
                   SHIELD {Math.ceil(playerRef.current.shield / 60)}s
                 </div>
               )}
-              {playerRef.current.magnet > 0 && (
+              {playerRef.current?.magnet > 0 && (
                 <div className="bg-blue-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
                   MAGNET {Math.ceil(playerRef.current.magnet / 60)}s
                 </div>
               )}
-              {playerRef.current.doubleScore > 0 && (
+              {playerRef.current?.doubleScore > 0 && (
                 <div className="bg-yellow-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
                   2X SCORE {Math.ceil(playerRef.current.doubleScore / 60)}s
                 </div>
               )}
-              {playerRef.current.dash > 0 && (
+              {playerRef.current?.dash > 0 && (
                 <div className="bg-red-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
                   DASH {Math.ceil(playerRef.current.dash / 60)}s
+                </div>
+              )}
+              {playerRef.current?.hzSkillActive > 0 && (
+                <div className="bg-blue-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
+                  FAT SHIELD {Math.ceil(playerRef.current.hzSkillActive / 60)}s
+                </div>
+              )}
+              {playerRef.current?.hzSkillSprint > 0 && (
+                <div className="bg-orange-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
+                  FAT SPRINT {Math.ceil(playerRef.current.hzSkillSprint / 60)}s
+                </div>
+              )}
+              {selectedCharacter === 'hz' && playerRef.current && (
+                <div className="bg-purple-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white">
+                  PASSIVE: {playerRef.current.hzPassiveCharges}
                 </div>
               )}
             </div>
@@ -1889,6 +2019,29 @@ function GameContent() {
             </button>
             <div className="text-center mt-1">
               <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">火烧赤壁</span>
+            </div>
+          </div>
+        )}
+
+        {/* Hz Skill Button */}
+        {gameState === 'playing' && selectedCharacter === 'hz' && (
+          <div className="absolute bottom-4 right-4 z-10">
+            <button
+              onClick={activateHzSkill}
+              disabled={playerRef.current && playerRef.current.hzSkillCharges < 3}
+              className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden ${
+                playerRef.current && playerRef.current.hzSkillCharges < 3
+                  ? 'bg-black/50 border-white/20 grayscale'
+                  : 'bg-blue-500 border-blue-300 shadow-[0_6px_0_#1e40af] active:translate-y-1 active:shadow-none'
+              }`}
+            >
+              <img src={hzSkillImg} alt="Skill" className="w-full h-full object-cover" />
+              <div className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
+                {playerRef.current ? playerRef.current.hzSkillCharges : 0}/3
+              </div>
+            </button>
+            <div className="text-center mt-1">
+              <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">脂肪护盾</span>
             </div>
           </div>
         )}
@@ -2056,7 +2209,7 @@ function GameContent() {
                     无尽<br/><span className="text-2xl">模式</span>
                   </button>
                   <button 
-                    onClick={startMatchmaking}
+                    onClick={() => startMatchmaking()}
                     className="flex-1 py-3 rounded-3xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] leading-tight"
                     style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                   >
@@ -2100,6 +2253,13 @@ function GameContent() {
                       img: hjdjImg, 
                       skill: '技能：火烧赤壁', 
                       desc: '获得主动技能火烧赤壁，获得十秒加速同时火势蔓延将前方障碍摧毁，副作用是道具也被烧了。' 
+                    },
+                    { 
+                      id: 'hz', 
+                      name: '呼子', 
+                      img: hzImg, 
+                      skill: '技能：脂肪护盾', 
+                      desc: '捡道具获得充能，充能3次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限3次。' 
                     }
                   ].map(char => (
                     <div 
@@ -2250,11 +2410,24 @@ function GameContent() {
                 </p>
                 
                 <button 
-                  onClick={() => {
+                  onClick={async () => {
+                    const currentMatchId = matchId;
                     setMatchState('none');
                     setMatchId(null);
                     setIsMultiplayer(false);
-                    // Optionally, delete or update the match document to cancel
+                    
+                    // Try to clean up the match if we were the creator
+                    if (currentMatchId && user) {
+                      try {
+                        const matchRef = doc(db, 'matches', currentMatchId);
+                        const snap = await getDoc(matchRef);
+                        if (snap.exists() && snap.data().status === 'waiting' && snap.data().player1.uid === user.uid) {
+                          await deleteDoc(matchRef);
+                        }
+                      } catch (e) {
+                        console.error("Failed to cleanup match:", e);
+                      }
+                    }
                   }}
                   className="mt-8 px-8 py-3 rounded-full bg-red-500/20 border-2 border-red-500 text-red-400 font-bold hover:bg-red-500/40 transition-colors relative z-10"
                 >
