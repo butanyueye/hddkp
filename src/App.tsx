@@ -4,8 +4,8 @@ import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
 import { hjdjBase64 as hjdjImg } from './hjdjBase64';
 import { hjdjSkillBase64 as hjdjSkillImg } from './hjdjSkillBase64';
-import hzImg from './hz.png';
-import hzSkillImg from './hzskill.png';
+import { hzBase64 as hzImg } from './hzBase64';
+import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
 import { auth, db } from './firebase';
 import { 
   onAuthStateChanged, 
