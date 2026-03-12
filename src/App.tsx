@@ -7,6 +7,16 @@ import { hjdjSkillBase64 as hjdjSkillImg } from './hjdjSkillBase64';
 import { hzBase64 as hzImg } from './hzBase64';
 import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
 import { auth, db } from './firebase';
+
+const getCharacterImage = (charId: string | undefined) => {
+  switch (charId) {
+    case 'santa': return santaImg;
+    case 'hjdj': return hjdjImg;
+    case 'hz': return hzImg;
+    case 'hdd':
+    default: return hddImg;
+  }
+};
 import { 
   onAuthStateChanged, 
   User,
@@ -1820,7 +1830,7 @@ function GameContent() {
     img.onload = () => {
       setPlayerImage(img);
     };
-    img.src = selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : hjdjImg);
+    img.src = getCharacterImage(selectedCharacter);
   }, [selectedCharacter]);
 
   return (
@@ -2031,8 +2041,8 @@ function GameContent() {
               disabled={playerRef.current && playerRef.current.hzSkillCharges < 3}
               className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden ${
                 playerRef.current && playerRef.current.hzSkillCharges < 3
-                  ? 'bg-black/50 border-white/20 grayscale'
-                  : 'bg-blue-500 border-blue-300 shadow-[0_6px_0_#1e40af] active:translate-y-1 active:shadow-none'
+                  ? 'bg-black/50 border-white/20 opacity-60'
+                  : 'bg-green-500 border-green-300 shadow-[0_6px_0_#2e7d32] active:translate-y-1 active:shadow-none'
               }`}
             >
               <img src={hzSkillImg} alt="Skill" className="w-full h-full object-cover" />
@@ -2158,7 +2168,7 @@ function GameContent() {
 
                 {/* Character */}
                 <div className="flex flex-col items-center">
-                  <img src={selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : hjdjImg)} alt="Character" className="h-56 object-contain drop-shadow-2xl z-10" />
+                  <img src={getCharacterImage(selectedCharacter)} alt="Character" className="h-56 object-contain drop-shadow-2xl z-10" />
                   
                   <button 
                     onClick={() => { playSound('score'); setShowCharSelect(true); }}
@@ -2350,7 +2360,7 @@ function GameContent() {
                 <div className="flex flex-col items-center z-10 animate-slideInLeft">
                   <div className="w-32 h-32 rounded-full border-4 border-blue-500 overflow-hidden bg-white/10 mb-4 shadow-[0_0_30px_rgba(59,130,246,0.5)]">
                     <img 
-                      src={selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : hjdjImg)} 
+                      src={getCharacterImage(selectedCharacter)} 
                       alt="You" 
                       className="w-full h-full object-contain"
                     />
@@ -2371,7 +2381,7 @@ function GameContent() {
                 <div className="flex flex-col items-center z-10 animate-slideInRight">
                   <div className="w-32 h-32 rounded-full border-4 border-red-500 overflow-hidden bg-white/10 mb-4 shadow-[0_0_30px_rgba(239,68,68,0.5)]">
                     <img 
-                      src={opponent?.character === 'santa' ? santaImg : (opponent?.character === 'hjdj' ? hjdjImg : hddImg)} 
+                      src={getCharacterImage(opponent?.character)} 
                       alt="Opponent" 
                       className="w-full h-full object-contain"
                     />
