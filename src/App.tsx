@@ -710,7 +710,7 @@ function GameContent() {
         const data = doc.data();
         const isNotMe = data.player1?.uid !== user.uid;
         const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
-        const isRecent = (Date.now() - createdAt) < 30000; // 30 seconds
+        const isRecent = Math.abs(Date.now() - createdAt) < 300000; // 5 minutes window to handle clock skew
         return isNotMe && isRecent;
       });
       
@@ -1028,7 +1028,7 @@ function GameContent() {
             createdMatchIdRef.current = null;
           }
         }
-      }, 30000); // 30 seconds timeout
+      }, 60000); // 60 seconds timeout
 
       // Poll every 3 seconds to see if there are other waiting matches we can join
       pollInterval = setInterval(async () => {
@@ -1051,7 +1051,7 @@ function GameContent() {
             const data = doc.data();
             const isNotMe = data.player1?.uid !== user.uid;
             const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
-            const isRecent = (Date.now() - createdAt) < 30000;
+            const isRecent = Math.abs(Date.now() - createdAt) < 300000;
             
             // Only join if the other match has a smaller ID than ours
             // This prevents two players from joining each other's matches simultaneously
@@ -2687,7 +2687,19 @@ function GameContent() {
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30">
               <h2 className="text-4xl font-black text-white mb-4 tracking-tighter drop-shadow-lg">等待对手结束...</h2>
               <p className="text-xl text-white/80 mb-8 font-medium">你的最终得分: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
-              <div className="w-16 h-16 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin"></div>
+              <div className="w-16 h-16 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin mb-8"></div>
+              <button 
+                onClick={() => {
+                  setMatchState('none');
+                  matchStateRef.current = 'none';
+                  setMatchId(null);
+                  setIsMultiplayer(false);
+                  setGameState('start');
+                }}
+                className="px-6 py-2 rounded-full bg-red-500/20 border-2 border-red-500 text-red-400 font-bold hover:bg-red-500/40 transition-colors"
+              >
+                退出匹配
+              </button>
             </div>
           )}
 
