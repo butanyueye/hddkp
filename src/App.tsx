@@ -776,18 +776,13 @@ function GameContent() {
       const q = query(
         collection(db, 'matches'), 
         where('roomType', '==', 'private'),
+        where('roomId', '==', code),
         where('status', '==', 'waiting'),
-        limit(10)
+        limit(1)
       );
-      console.log("Searching for any private waiting matches");
       const querySnapshot = await getDocs(q);
-      console.log("Found matches:", querySnapshot.size);
       
-      // Filter by roomId manually to debug
-      const matchDoc = querySnapshot.docs.find(doc => doc.data().roomId === code);
-      
-      if (!matchDoc) {
-        console.log("No match found for code:", code);
+      if (querySnapshot.empty) {
         alert("未找到该房间或房间已满");
         setMatchState('none');
         matchStateRef.current = 'none';
@@ -795,6 +790,7 @@ function GameContent() {
         return;
       }
       
+      const matchDoc = querySnapshot.docs[0];
       const matchRef = doc(db, 'matches', matchDoc.id);
       
       let joined = false;
@@ -860,11 +856,8 @@ function GameContent() {
       };
       if (type === 'private' && roomId) {
         matchData.roomId = roomId;
-        console.log("Creating private match with roomId:", roomId);
       }
-      console.log("Match data to be created:", matchData);
       await setDoc(newMatchRef, matchData);
-      console.log("Match created with ID:", newMatchRef.id);
       createdMatchIdRef.current = newMatchRef.id;
       setMatchId(newMatchRef.id);
       matchIdRef.current = newMatchRef.id;

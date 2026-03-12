@@ -114,7 +114,7 @@ service cloud.firestore {
 
     function isValidMatch(data) {
       return hasRequiredFields(['status', 'createdAt', 'player1']) &&
-             data.status in ['waiting', 'playing', 'finished'] &&
+             data.status in ['waiting', 'ready', 'playing', 'finished'] &&
              data.createdAt is timestamp &&
              isValidPlayerObj(data.player1) &&
              (!('player2' in data) || data.player2 == null || isValidPlayerObj(data.player2)) &&
