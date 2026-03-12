@@ -1251,9 +1251,19 @@ function GameContent() {
     setAvatarId(charId);
     setShowAvatarSelect(false);
     try {
+      // Update user profile
       await setDoc(doc(db, 'users', user.uid), {
         avatarId: charId
       }, { merge: true });
+
+      // Update leaderboard entry if it exists
+      const leaderboardRef = doc(db, 'leaderboard', user.uid);
+      const leaderboardDoc = await getDoc(leaderboardRef);
+      if (leaderboardDoc.exists()) {
+        await setDoc(leaderboardRef, {
+          avatarId: charId
+        }, { merge: true });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
     }
