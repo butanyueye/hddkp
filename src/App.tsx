@@ -362,6 +362,7 @@ function GameContent() {
   
   // Multiplayer state
   const [matchState, setMatchState] = useState<'none' | 'matching' | 'vs' | 'playing' | 'finished'>('none');
+  const [matchmakingStatus, setMatchmakingStatus] = useState<string>('正在连接服务器...');
   const [matchId, setMatchId] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<{ name: string, score: number, status: string, character?: string } | null>(null);
   const [matchResult, setMatchResult] = useState<'win' | 'lose' | 'draw' | null>(null);
@@ -656,6 +657,7 @@ function GameContent() {
       });
       createdMatchIdRef.current = newMatchRef.id;
       setMatchId(newMatchRef.id);
+      matchIdRef.current = newMatchRef.id;
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'matches');
       setMatchState('none');
@@ -678,6 +680,7 @@ function GameContent() {
     // Reset state
     setMatchState('matching');
     matchStateRef.current = 'matching';
+    setMatchmakingStatus('正在连接服务器...');
     setIsMultiplayer(true);
     setMatchResult(null);
     setOpponent(null);
@@ -692,6 +695,8 @@ function GameContent() {
 
       // Check if we are still in matching state after jitter
       if (matchStateRef.current !== 'matching') return;
+
+      setMatchmakingStatus('正在扫描可用房间...');
 
       // Query for waiting matches
       const q = query(
@@ -742,6 +747,7 @@ function GameContent() {
           
           console.log("Matchmaking: Successfully joined match", matchDoc.id);
           setMatchId(matchDoc.id);
+          matchIdRef.current = matchDoc.id;
         } catch (e) {
           console.log("Matchmaking: Transaction failed, retrying...", e);
           if (retryCount < 3) {
@@ -753,6 +759,7 @@ function GameContent() {
         }
       } else {
         console.log("Matchmaking: No existing match found, creating new match");
+        setMatchmakingStatus('未找到房间，正在创建新房间...');
         // No match found, but wait a tiny bit more to see if one appears (double check)
         await new Promise(resolve => setTimeout(resolve, 500));
         if (matchStateRef.current !== 'matching') return;
@@ -766,6 +773,7 @@ function GameContent() {
         }).length === 0;
 
         if (stillNoMatches) {
+          setMatchmakingStatus('正在创建房间并等待对手...');
           createNewMatch();
         } else {
           console.log("Matchmaking: Match appeared during double check, retrying");
@@ -956,6 +964,7 @@ function GameContent() {
           // Match found, show VS screen!
           setMatchState('vs');
           matchStateRef.current = 'vs';
+          setMatchmakingStatus('匹配成功！');
           setTimeout(() => {
             if (matchStateRef.current === 'vs') {
               setMatchState('playing');
@@ -979,6 +988,10 @@ function GameContent() {
         }
       } else {
         console.log("Match Sync: Match document does not exist", matchId);
+        if (matchId !== matchIdRef.current) {
+          console.log("Match Sync: Ignoring delete for old match", matchId);
+          return;
+        }
         if (matchStateRef.current === 'matching' || matchStateRef.current === 'vs') {
           setMatchMessage('匹配已取消或失效');
           setMatchState('none');
@@ -1023,6 +1036,8 @@ function GameContent() {
         
         // If we already joined a match (but haven't transitioned to 'vs' yet), don't poll
         if (matchIdRef.current && matchIdRef.current !== createdMatchIdRef.current) return;
+        
+        setMatchmakingStatus(prev => prev === '正在扩大搜索范围...' ? '正在等待对手加入...' : '正在扩大搜索范围...');
         
         try {
           const q = query(
@@ -1081,12 +1096,13 @@ function GameContent() {
             
             if (joined) {
               console.log("Matchmaking Polling: Successfully joined match", matchDoc.id);
+              setMatchId(matchDoc.id);
+              matchIdRef.current = matchDoc.id;
               // Delete our own waiting match if we had one
               if (createdMatchIdRef.current) {
                 deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
                 createdMatchIdRef.current = null;
               }
-              setMatchId(matchDoc.id);
             }
           }
         } catch (e) {
@@ -2729,7 +2745,7 @@ function GameContent() {
                 </div>
                 
                 <p className="text-[#c7d2fe] font-medium text-center relative z-10 animate-pulse">
-                  正在为您匹配实力相当的玩家
+                  {matchmakingStatus}
                 </p>
                 
                 <button 

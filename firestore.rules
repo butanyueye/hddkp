@@ -71,15 +71,16 @@ service cloud.firestore {
     
     function isValidLeaderboardEntry(data) {
       return hasRequiredFields(['userId', 'name', 'score', 'timestamp']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId']) &&
              validStringLength('userId', 1, 100) &&
              validStringLength('name', 1, 50) &&
              isPositiveNumber('score') &&
+             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
              data.timestamp is timestamp;
     }
 
     function isValidUserStats(data) {
-      return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId']) &&
+      return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
              hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
@@ -89,8 +90,8 @@ service cloud.firestore {
              isPositiveNumber('diamonds') &&
              isValidInventoryMap(data.inventory) &&
              isValidList('achievements', 100) &&
-             isValidList('unlockedCharacters', 10) &&
-             validStringLength('avatarId', 1, 50);
+             (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
+             (!('avatarId' in data) || validStringLength('avatarId', 1, 50));
     }
 
     function isValidCheckIn(data) {
@@ -156,7 +157,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidMatch(request.resource.data) && request.resource.data.player1.uid == request.auth.uid;
       allow update: if isAuthenticated() && isValidMatch(request.resource.data);
-      allow delete: if false;
+      allow delete: if isAuthenticated() && resource.data.player1.uid == request.auth.uid;
     }
 
     // Default deny
