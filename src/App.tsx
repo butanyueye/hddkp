@@ -654,10 +654,12 @@ function GameContent() {
           character: selectedCharacter
         }
       });
+      createdMatchIdRef.current = newMatchRef.id;
       setMatchId(newMatchRef.id);
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'matches');
       setMatchState('none');
+      matchStateRef.current = 'none';
       setMatchId(null);
       setIsMultiplayer(false);
     }
@@ -667,6 +669,10 @@ function GameContent() {
     if (!user) {
       setShowAuthModal(true);
       return;
+    }
+    
+    if (retryCount === 0 && matchStateRef.current === 'matching') {
+      return; // Already matching
     }
     
     // Reset state
@@ -771,6 +777,7 @@ function GameContent() {
       console.error("Matchmaking error:", e);
       handleFirestoreError(e, OperationType.LIST, 'matches');
       setMatchState('none');
+      matchStateRef.current = 'none';
       setMatchId(null);
       setIsMultiplayer(false);
     }
@@ -913,9 +920,16 @@ function GameContent() {
 
   const matchDataRef = useRef<any>(null);
   const matchStateRef = useRef(matchState);
+  const createdMatchIdRef = useRef<string | null>(null);
+  const matchIdRef = useRef<string | null>(matchId);
+  
   useEffect(() => {
     matchStateRef.current = matchState;
   }, [matchState]);
+
+  useEffect(() => {
+    matchIdRef.current = matchId;
+  }, [matchId]);
 
   // --- Match Real-time Sync ---
   useEffect(() => {
@@ -941,9 +955,11 @@ function GameContent() {
           console.log("Match Sync: Match found, transitioning to playing", matchId);
           // Match found, show VS screen!
           setMatchState('vs');
+          matchStateRef.current = 'vs';
           setTimeout(() => {
             if (matchStateRef.current === 'vs') {
               setMatchState('playing');
+              matchStateRef.current = 'playing';
               startGame();
             }
           }, 3000);
@@ -952,6 +968,7 @@ function GameContent() {
         if (data.status === 'finished' && matchStateRef.current !== 'finished') {
           console.log("Match Sync: Match finished", matchId);
           setMatchState('finished');
+          matchStateRef.current = 'finished';
           if (data.winner === user.uid) {
             setMatchResult('win');
           } else if (data.winner === 'draw') {
@@ -962,6 +979,14 @@ function GameContent() {
         }
       } else {
         console.log("Match Sync: Match document does not exist", matchId);
+        if (matchStateRef.current === 'matching' || matchStateRef.current === 'vs') {
+          setMatchMessage('匹配已取消或失效');
+          setMatchState('none');
+          matchStateRef.current = 'none';
+          setMatchId(null);
+          setIsMultiplayer(false);
+          createdMatchIdRef.current = null;
+        }
       }
     }, (error) => {
       console.error("Match Sync: Error", error);
@@ -971,21 +996,110 @@ function GameContent() {
     return () => unsubscribe();
   }, [matchId, user, startGame]);
 
-  // --- Matchmaking Timeout ---
+  // --- Matchmaking Timeout & Polling ---
   useEffect(() => {
     let timeout: NodeJS.Timeout;
+    let pollInterval: NodeJS.Timeout;
+
     if (matchState === 'matching') {
       timeout = setTimeout(() => {
         if (matchStateRef.current === 'matching') {
           setMatchMessage('匹配超时，请重试');
           setMatchState('none');
+          matchStateRef.current = 'none';
           setMatchId(null);
           setIsMultiplayer(false);
+          
+          if (createdMatchIdRef.current) {
+            deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
+            createdMatchIdRef.current = null;
+          }
         }
       }, 30000); // 30 seconds timeout
+
+      // Poll every 3 seconds to see if there are other waiting matches we can join
+      pollInterval = setInterval(async () => {
+        if (matchStateRef.current !== 'matching' || !user) return;
+        
+        // If we already joined a match (but haven't transitioned to 'vs' yet), don't poll
+        if (matchIdRef.current && matchIdRef.current !== createdMatchIdRef.current) return;
+        
+        try {
+          const q = query(
+            collection(db, 'matches'), 
+            where('status', '==', 'waiting'), 
+            limit(10)
+          );
+          const querySnapshot = await getDocs(q);
+          
+          const validDocs = querySnapshot.docs.filter(doc => {
+            const data = doc.data();
+            const isNotMe = data.player1?.uid !== user.uid;
+            const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+            const isRecent = (Date.now() - createdAt) < 30000;
+            
+            // Only join if the other match has a smaller ID than ours
+            // This prevents two players from joining each other's matches simultaneously
+            let isOlder = true;
+            if (createdMatchIdRef.current) {
+               isOlder = doc.id < createdMatchIdRef.current;
+            }
+            
+            return isNotMe && isRecent && isOlder;
+          });
+          
+          if (validDocs.length > 0) {
+            // Sort by newest first
+            validDocs.sort((a, b) => {
+              const timeA = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : 0;
+              const timeB = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : 0;
+              return timeB - timeA;
+            });
+            
+            const matchDoc = validDocs[0];
+            const matchRef = doc(db, 'matches', matchDoc.id);
+            
+            let joined = false;
+            await runTransaction(db, async (transaction) => {
+              const sfDoc = await transaction.get(matchRef);
+              if (!sfDoc.exists() || sfDoc.data().status !== 'waiting') {
+                return; // Can't join
+              }
+              
+              transaction.update(matchRef, {
+                status: 'playing',
+                player2: {
+                  uid: user.uid,
+                  name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+                  score: 0,
+                  status: 'playing',
+                  character: selectedCharacter
+                }
+              });
+              joined = true;
+            });
+            
+            if (joined) {
+              console.log("Matchmaking Polling: Successfully joined match", matchDoc.id);
+              // Delete our own waiting match if we had one
+              if (createdMatchIdRef.current) {
+                deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
+                createdMatchIdRef.current = null;
+              }
+              setMatchId(matchDoc.id);
+            }
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      }, 3000);
     }
-    return () => clearTimeout(timeout);
-  }, [matchState]);
+    
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(pollInterval);
+    };
+  }, [matchState, user, selectedCharacter]);
 
   const activateHzSkill = useCallback(() => {
     if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 3) {
@@ -2622,11 +2736,19 @@ function GameContent() {
                   onClick={async () => {
                     const currentMatchId = matchId;
                     setMatchState('none');
+                    matchStateRef.current = 'none';
                     setMatchId(null);
                     setIsMultiplayer(false);
                     
                     // Try to clean up the match if we were the creator
-                    if (currentMatchId && user) {
+                    if (createdMatchIdRef.current) {
+                      try {
+                        await deleteDoc(doc(db, 'matches', createdMatchIdRef.current));
+                        createdMatchIdRef.current = null;
+                      } catch (e) {
+                        console.error("Failed to cleanup match:", e);
+                      }
+                    } else if (currentMatchId && user) {
                       try {
                         const matchRef = doc(db, 'matches', currentMatchId);
                         const snap = await getDoc(matchRef);
@@ -2678,6 +2800,7 @@ function GameContent() {
                 <button 
                   onClick={() => {
                     setMatchState('none');
+                    matchStateRef.current = 'none';
                     setMatchId(null);
                     setIsMultiplayer(false);
                     setGameState('start');
