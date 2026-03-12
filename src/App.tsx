@@ -2439,7 +2439,7 @@ function GameContent() {
                 }}>
                   呼大帝快跑
                 </h1>
-                {user && <p className="text-white text-xs font-bold mt-2 bg-black/30 px-2 py-1 rounded-full">欢迎, {user.displayName || (user.isAnonymous ? '游客' : '玩家')}</p>}
+                {/* {user && <p className="text-white text-xs font-bold mt-2 bg-black/30 px-2 py-1 rounded-full">欢迎, {user.displayName || (user.isAnonymous ? '游客' : '玩家')}</p>} */}
               </div>
 
               {/* Character & Side Buttons */}
