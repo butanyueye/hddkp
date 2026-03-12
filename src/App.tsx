@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
 import { hjdjBase64 as hjdjImg } from './hjdjBase64';
@@ -70,6 +71,13 @@ const SHOP_ITEMS = {
   magnet: { name: '磁铁', cost: 30, description: '自动吸引附近的道具和钻石' },
   doubleScore: { name: '双倍积分', cost: 40, description: '获得积分翻倍' },
   dash: { name: '冲刺', cost: 60, description: '无敌冲刺并摧毁障碍物' }
+};
+
+const CHARACTER_REQUIREMENTS: Record<string, number> = {
+  hdd: 0,
+  santa: 1000,
+  hjdj: 2000,
+  hz: 3000
 };
 
 let audioCtx: AudioContext | null = null;
@@ -334,6 +342,8 @@ function GameContent() {
   });
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number}[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
+  const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd']);
+  const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
@@ -424,6 +434,7 @@ function GameContent() {
             setDiamonds(data.diamonds || 0);
             setInventory(data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 });
             setAchievements(data.achievements || []);
+            setUnlockedCharacters(data.unlockedCharacters || ['hdd']);
           } else {
             // Initialize user doc
             const initialData = {
@@ -434,13 +445,15 @@ function GameContent() {
               totalGames: 0,
               diamonds: 200,
               inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
-              achievements: []
+              achievements: [],
+              unlockedCharacters: ['hdd']
             };
             await setDoc(doc(db, 'users', u.uid), initialData);
             setHighScore(0);
             setDiamonds(200);
             setInventory(initialData.inventory);
             setAchievements([]);
+            setUnlockedCharacters(['hdd']);
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
@@ -1089,6 +1102,25 @@ function GameContent() {
         }
       }
       playSound('score');
+    }
+  };
+
+  const unlockCharacter = async (charId: string) => {
+    if (!user) return;
+    const req = CHARACTER_REQUIREMENTS[charId];
+    if (highScore >= req && !unlockedCharacters.includes(charId)) {
+      const newUnlocked = [...unlockedCharacters, charId];
+      setUnlockedCharacters(newUnlocked);
+      setUnlockingChar(charId);
+      playSound('score');
+      
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          unlockedCharacters: newUnlocked
+        }, { merge: true });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+      }
     }
   };
 
@@ -1837,6 +1869,92 @@ function GameContent() {
     <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 font-sans text-neutral-100">
       <div className="w-full max-w-[400px] bg-neutral-900 rounded-3xl shadow-2xl overflow-hidden border-4 border-neutral-800 relative">
         
+        {/* Unlock Animation Modal */}
+        <AnimatePresence>
+          {unlockingChar && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-6 backdrop-blur-xl"
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", damping: 12, stiffness: 100 }}
+                className="relative flex flex-col items-center"
+              >
+                <div className="absolute inset-0 bg-yellow-400 rounded-full blur-3xl opacity-30 animate-pulse"></div>
+                <div className="w-48 h-48 bg-gradient-to-br from-yellow-200 to-yellow-500 rounded-full border-8 border-white shadow-[0_0_50px_rgba(234,179,8,0.6)] flex items-center justify-center overflow-hidden mb-8 relative z-10">
+                  <img 
+                    src={getCharacterImage(unlockingChar)} 
+                    alt="Unlocked" 
+                    className="h-4/5 object-contain drop-shadow-2xl"
+                  />
+                </div>
+                <motion.h2 
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-4xl font-black text-yellow-400 mb-2 text-center"
+                  style={{ textShadow: '0 0 20px rgba(234,179,8,0.8)' }}
+                >
+                  新角色解锁！
+                </motion.h2>
+                <motion.p 
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-white text-xl font-bold mb-8"
+                >
+                  恭喜获得：{
+                    unlockingChar === 'santa' ? '圣诞老呼' : 
+                    unlockingChar === 'hjdj' ? '海军大将' : 
+                    unlockingChar === 'hz' ? '呼子' : '新伙伴'
+                  }
+                </motion.p>
+                <motion.button
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                  onClick={() => setUnlockingChar(null)}
+                  className="px-12 py-4 bg-white text-black rounded-full font-black text-xl shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  太棒了！
+                </motion.button>
+              </motion.div>
+              
+              {/* Confetti-like particles */}
+              {[...Array(20)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ 
+                    x: 0, 
+                    y: 0, 
+                    scale: 0 
+                  }}
+                  animate={{ 
+                    x: (Math.random() - 0.5) * 400, 
+                    y: (Math.random() - 0.5) * 400, 
+                    scale: Math.random() * 1.5,
+                    rotate: Math.random() * 360
+                  }}
+                  transition={{ 
+                    duration: 1, 
+                    delay: 0.2,
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                  }}
+                  className="absolute w-4 h-4 rounded-sm"
+                  style={{ 
+                    backgroundColor: ['#fbbf24', '#34d399', '#60a5fa', '#f87171'][Math.floor(Math.random() * 4)]
+                  }}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Check-in Modal */}
         {showCheckInModal && (
           <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
@@ -2271,30 +2389,60 @@ function GameContent() {
                       skill: '技能：脂肪护盾', 
                       desc: '捡道具获得充能，充能3次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限3次。' 
                     }
-                  ].map(char => (
-                    <div 
-                      key={char.id}
-                      onClick={() => { playSound('score'); setSelectedCharacter(char.id as any); }}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border-4 transition-all cursor-pointer ${selectedCharacter === char.id ? 'bg-[#ffecb3] border-[#ffb300] scale-[1.02]' : 'bg-white border-gray-200 hover:border-[#ffe082]'}`}
-                    >
-                      <div className="w-20 h-20 bg-white rounded-xl border-2 border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
-                        <img src={char.img} alt={char.name} className="h-full object-contain" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="flex flex-col">
-                            <h3 className="text-xl font-black text-[#5d4037]">{char.name}</h3>
-                            {'author' in char && <span className="text-[10px] text-gray-500 font-bold mt-0.5">{char.author}</span>}
+                  ].map(char => {
+                    const isUnlocked = unlockedCharacters.includes(char.id);
+                    const canUnlock = highScore >= CHARACTER_REQUIREMENTS[char.id];
+                    const reqScore = CHARACTER_REQUIREMENTS[char.id];
+
+                    return (
+                      <div 
+                        key={char.id}
+                        onClick={() => { 
+                          if (isUnlocked) {
+                            playSound('score'); 
+                            setSelectedCharacter(char.id as any); 
+                          }
+                        }}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-4 transition-all cursor-pointer relative ${
+                          selectedCharacter === char.id ? 'bg-[#ffecb3] border-[#ffb300] scale-[1.02]' : 
+                          isUnlocked ? 'bg-white border-gray-200 hover:border-[#ffe082]' : 
+                          'bg-gray-100 border-gray-300 opacity-80'
+                        }`}
+                      >
+                        {!isUnlocked && (
+                          <div className="absolute inset-0 z-20 bg-black/10 flex flex-col items-center justify-center rounded-xl backdrop-blur-[1px]">
+                            <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
+                              <Lock size={10} /> 需达到 {reqScore} 分
+                            </div>
+                            {canUnlock && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); unlockCharacter(char.id); }}
+                                className="bg-green-500 text-white px-4 py-1 rounded-full text-xs font-black shadow-[0_4px_0_#2e7d32] active:translate-y-1 active:shadow-none animate-bounce"
+                              >
+                                点击解锁
+                              </button>
+                            )}
                           </div>
-                          {selectedCharacter === char.id && (
-                            <span className="bg-[#ffb300] text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1">已选择</span>
-                          )}
+                        )}
+                        <div className={`w-20 h-20 bg-white rounded-xl border-2 border-gray-100 flex items-center justify-center overflow-hidden shrink-0 ${!isUnlocked ? 'grayscale' : ''}`}>
+                          <img src={char.img} alt={char.name} className="h-full object-contain" />
                         </div>
-                        <p className="text-[#e65100] font-black text-xs mb-1">{char.skill}</p>
-                        <p className="text-[#795548] text-[10px] leading-tight font-medium">{char.desc}</p>
+                        <div className="flex-1 text-left">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex flex-col">
+                              <h3 className="text-xl font-black text-[#5d4037]">{char.name}</h3>
+                              {'author' in char && <span className="text-[10px] text-gray-500 font-bold mt-0.5">{char.author}</span>}
+                            </div>
+                            {selectedCharacter === char.id && (
+                              <span className="bg-[#ffb300] text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1">已选择</span>
+                            )}
+                          </div>
+                          <p className="text-[#e65100] font-black text-xs mb-1">{char.skill}</p>
+                          <p className="text-[#795548] text-[10px] leading-tight font-medium">{char.desc}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 
                 <div className="p-6 pt-0">

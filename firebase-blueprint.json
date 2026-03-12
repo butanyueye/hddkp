@@ -33,9 +33,10 @@
             "dash": { "type": "integer" }
           }
         },
-        "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievements" }
+        "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievements" },
+        "unlockedCharacters": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked character IDs" }
       },
-      "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory"]
+      "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory", "unlockedCharacters"]
     },
     "CheckIn": {
       "title": "CheckIn",
