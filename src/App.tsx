@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift } from 'lucide-react';
-import hddImg from './hdd.png';
-import santaImg from './sdlh.png';
-import hjdjImg from './hjdj.png';
-import hzImg from './hz.png';
+import { hddBase64 as hddImg } from './hddBase64';
+import { sdlhBase64 as santaImg } from './sdlhBase64';
+import { hjdjBase64 as hjdjImg } from './hjdjBase64';
 import { hjdjSkillBase64 as hjdjSkillImg } from './hjdjSkillBase64';
+import { hzBase64 as hzImg } from './hzBase64';
 import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
 import { auth, db } from './firebase';
 import { 
@@ -1818,14 +1818,9 @@ function GameContent() {
   useEffect(() => {
     const img = new Image();
     img.onload = () => {
-      console.log("Image loaded successfully");
       setPlayerImage(img);
     };
-    img.onerror = (e) => {
-      console.error("Image failed to load", e);
-    };
-    img.src = selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : (selectedCharacter === 'hjdj' ? hjdjImg : hzImg));
-    console.log("Setting image src", img.src);
+    img.src = selectedCharacter === 'hdd' ? hddImg : (selectedCharacter === 'santa' ? santaImg : hjdjImg);
   }, [selectedCharacter]);
 
   return (
