@@ -862,6 +862,7 @@ function GameContent() {
         matchData.roomId = roomId;
         console.log("Creating private match with roomId:", roomId);
       }
+      console.log("Match data to be created:", matchData);
       await setDoc(newMatchRef, matchData);
       console.log("Match created with ID:", newMatchRef.id);
       createdMatchIdRef.current = newMatchRef.id;
