@@ -340,7 +340,7 @@ function GameContent() {
     doubleScore: 5,
     dash: 5
   });
-  const [leaderboard, setLeaderboard] = useState<{name: string, score: number}[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string}[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd']);
   const [avatarId, setAvatarId] = useState<string>('hdd');
@@ -528,7 +528,8 @@ function GameContent() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const entries = snapshot.docs.map(doc => ({
         name: doc.data().name,
-        score: doc.data().score
+        score: doc.data().score,
+        avatarId: doc.data().avatarId
       }));
       setLeaderboard(entries);
     }, (error) => {
@@ -863,6 +864,7 @@ function GameContent() {
           userId: user.uid,
           name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
           score: finalScore,
+          avatarId: avatarId,
           timestamp: serverTimestamp()
         });
       } else {
@@ -2698,17 +2700,42 @@ function GameContent() {
                   <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">X</button>
                 </div>
                 
-                <div className="w-full space-y-2 mb-6">
+                <div className="w-full space-y-2 mb-6 max-h-[400px] overflow-y-auto pr-1">
                   {leaderboard.length > 0 ? leaderboard.map((entry, i) => (
-                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border-2 border-gray-100">
+                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-2xl border-2 border-gray-100 shadow-sm">
                       <div className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-yellow-400' : 'bg-gray-200'}`}>{i + 1}</span>
-                        <span className="font-bold text-gray-700">{entry.name}</span>
+                        <div className="relative">
+                          <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white z-10 shadow-sm ${
+                            i === 0 ? 'bg-yellow-400' : 
+                            i === 1 ? 'bg-gray-300' : 
+                            i === 2 ? 'bg-orange-400' : 'bg-gray-400'
+                          }`}>
+                            {i + 1}
+                          </span>
+                          <div className={`w-10 h-10 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 ${
+                            i === 0 ? 'border-yellow-400' : 
+                            i === 1 ? 'border-gray-300' : 
+                            i === 2 ? 'border-orange-400' : 'border-gray-100'
+                          }`}>
+                            <img 
+                              src={getCharacterImage(entry.avatarId || 'hdd')} 
+                              alt={entry.name} 
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        </div>
+                        <span className="font-black text-[#5d4037] truncate max-w-[120px]">{entry.name}</span>
                       </div>
-                      <span className="font-mono font-bold text-yellow-600">{entry.score}</span>
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono font-black text-yellow-600 text-lg leading-none">{entry.score}</span>
+                        <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
+                      </div>
                     </div>
                   )) : (
-                    <p className="text-gray-400 italic text-center py-4">暂无排名，快去挑战吧！</p>
+                    <div className="flex flex-col items-center justify-center py-10 opacity-40">
+                      <span className="text-4xl mb-2">🏆</span>
+                      <p className="text-gray-500 font-bold italic">暂无排名，快去挑战吧！</p>
+                    </div>
                   )}
                 </div>
                 
