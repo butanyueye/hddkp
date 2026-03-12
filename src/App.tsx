@@ -686,17 +686,24 @@ function GameContent() {
     
     const fetchFriends = async () => {
       try {
-        // Firestore 'in' query is limited to 10 items, so we might need to chunk it
-        // For simplicity, we'll just fetch the first 10 friends if there are more
-        const friendsToFetch = friends.slice(0, 10);
-        if (friendsToFetch.length === 0) return;
+        if (friends.length === 0) {
+          setFriendsData([]);
+          return;
+        }
         
-        const q = query(collection(db, 'users'), where('__name__', 'in', friendsToFetch));
-        const querySnapshot = await getDocs(q);
+        // Firestore 'in' query is limited to 30 items
+        const chunkSize = 30;
         const friendsList: any[] = [];
-        querySnapshot.forEach((doc) => {
-          friendsList.push({ uid: doc.id, ...doc.data() });
-        });
+        
+        for (let i = 0; i < friends.length; i += chunkSize) {
+          const chunk = friends.slice(i, i + chunkSize);
+          const q = query(collection(db, 'users'), where('__name__', 'in', chunk));
+          const querySnapshot = await getDocs(q);
+          querySnapshot.forEach((doc) => {
+            friendsList.push({ uid: doc.id, ...doc.data() });
+          });
+        }
+        
         setFriendsData(friendsList);
       } catch (error) {
         console.error("Error fetching friends data:", error);
@@ -830,6 +837,7 @@ function GameContent() {
   const startPrivateMatch = async () => {
     if (!isHost || !matchId) return;
     try {
+      setShowFriendsModal(false);
       await setDoc(doc(db, 'matches', matchId), {
         status: 'playing'
       }, { merge: true });
@@ -1175,6 +1183,7 @@ function GameContent() {
         
         if (data.status === 'playing' && matchStateRef.current === 'matching') {
           console.log("Match Sync: Match found, transitioning to playing", matchId);
+          setShowFriendsModal(false);
           // Match found, show VS screen!
           setMatchState('vs');
           matchStateRef.current = 'vs';
@@ -2421,23 +2430,23 @@ function GameContent() {
         {showFriendsModal && (
           <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
             <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
-              <div className="bg-blue-600 p-4 flex justify-between items-center">
-                <h2 className="text-2xl font-black text-white">好友 & 房间</h2>
-                <button onClick={() => setShowFriendsModal(false)} className="text-white hover:scale-110 transition-transform">
-                  <X size={32} strokeWidth={3} />
+              <div className="bg-purple-900 p-6 flex justify-between items-center">
+                <h2 className="text-2xl font-black text-white tracking-tight">好友与房间</h2>
+                <button onClick={() => setShowFriendsModal(false)} className="text-purple-400 hover:text-white transition-colors">
+                  <X size={28} />
                 </button>
               </div>
               
               <div className="p-4 flex flex-col gap-4 overflow-y-auto">
                 {/* Room Section */}
-                <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-200">
-                  <h3 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
-                    <Play size={18} /> 自定义房间
+                <div className="bg-purple-50 p-5 rounded-2xl border border-purple-200">
+                  <h3 className="font-bold text-zinc-900 mb-4 flex items-center gap-2 text-lg">
+                    <Play size={20} className="text-purple-600" /> 自定义房间
                   </h3>
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex gap-3 mb-4">
                     <button 
                       onClick={createPrivateRoom}
-                      className="flex-1 bg-blue-500 text-white font-bold py-2 rounded-xl shadow-[0_4px_0_#1d4ed8] active:translate-y-1 active:shadow-none transition-all"
+                      className="flex-1 bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 active:scale-95 transition-all shadow-md"
                     >
                       创建房间
                     </button>
@@ -2448,11 +2457,11 @@ function GameContent() {
                       placeholder="输入6位房间号" 
                       value={roomCodeInput}
                       onChange={(e) => setRoomCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="flex-1 border-2 border-blue-200 rounded-xl px-3 py-2 font-mono text-center text-blue-900 bg-white"
+                      className="flex-1 border-2 border-purple-200 rounded-xl px-4 py-3 font-mono text-center text-zinc-900 bg-white focus:border-purple-500 focus:outline-none"
                     />
                     <button 
                       onClick={() => joinPrivateRoom(roomCodeInput)}
-                      className="bg-green-500 text-white font-bold px-4 py-2 rounded-xl shadow-[0_4px_0_#15803d] active:translate-y-1 active:shadow-none transition-all"
+                      className="bg-purple-500 text-white font-bold px-6 py-3 rounded-xl hover:bg-purple-600 active:scale-95 transition-all shadow-md"
                     >
                       加入
                     </button>
@@ -2461,30 +2470,33 @@ function GameContent() {
 
                 {/* Friends List */}
                 <div>
-                  <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                    <Users size={18} /> 我的好友 ({friendsData.length})
+                  <h3 className="font-bold text-zinc-900 mb-3 flex items-center gap-2 text-lg">
+                    <Users size={20} className="text-purple-500" /> 我的好友 ({friendsData.length})
                   </h3>
                   {friendsData.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4 bg-gray-50 rounded-xl border border-gray-100">暂无好友，快去添加吧！</p>
+                    <div className="text-purple-500 text-sm text-center py-8 bg-purple-50 rounded-2xl border border-dashed border-purple-300">
+                      暂无好友，快去添加吧！
+                    </div>
                   ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       {friendsData.map(friend => (
-                        <div key={friend.uid} className="flex items-center justify-between bg-white border-2 border-gray-100 p-2 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
+                        <div key={friend.uid} className="flex items-center justify-between bg-white border border-purple-200 p-3 rounded-2xl hover:border-purple-300 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-purple-50 rounded-full overflow-hidden flex items-center justify-center border border-purple-200">
                               {friend.avatarId ? (
                                 <img src={getCharacterImage(friend.avatarId)} alt="avatar" className="w-full h-full object-contain" />
                               ) : (
-                                <Users size={16} className="text-gray-400" />
+                                <Users size={20} className="text-purple-400" />
                               )}
                             </div>
-                            <span className="font-bold text-gray-700 text-sm">{friend.name}</span>
+                            <span className="font-semibold text-zinc-800">{friend.name}</span>
                           </div>
                           <button 
                             onClick={() => removeFriend(friend.uid)}
-                            className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded-lg hover:bg-red-100"
+                            className="text-purple-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all"
+                            title="删除好友"
                           >
-                            删除
+                            <X size={18} />
                           </button>
                         </div>
                       ))}
