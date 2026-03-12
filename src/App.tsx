@@ -343,7 +343,10 @@ function GameContent() {
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number}[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd']);
+  const [avatarId, setAvatarId] = useState<string>('hdd');
+  const [showAvatarSelect, setShowAvatarSelect] = useState(false);
   const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
+  const [reviveCount, setReviveCount] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
@@ -435,6 +438,7 @@ function GameContent() {
             setInventory(data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 });
             setAchievements(data.achievements || []);
             setUnlockedCharacters(data.unlockedCharacters || ['hdd']);
+            setAvatarId(data.avatarId || 'hdd');
           } else {
             // Initialize user doc
             const initialData = {
@@ -446,7 +450,8 @@ function GameContent() {
               diamonds: 200,
               inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
               achievements: [],
-              unlockedCharacters: ['hdd']
+              unlockedCharacters: ['hdd'],
+              avatarId: 'hdd'
             };
             await setDoc(doc(db, 'users', u.uid), initialData);
             setHighScore(0);
@@ -454,6 +459,7 @@ function GameContent() {
             setInventory(initialData.inventory);
             setAchievements([]);
             setUnlockedCharacters(['hdd']);
+            setAvatarId('hdd');
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
@@ -875,6 +881,7 @@ function GameContent() {
     startBgm();
     setGameState('playing');
     setScore(0);
+    setReviveCount(0);
     scoreAccumulatorRef.current = 0;
     playerRef.current = { 
       x: 50, y: 400, width: 60, height: 120, vy: 0, 
@@ -1050,9 +1057,11 @@ function GameContent() {
   }, []);
 
   const revive = async () => {
-    if (diamonds >= 50) {
-      const newDiamonds = diamonds - 50;
+    const costs = [50, 100, 200];
+    if (reviveCount < 3 && diamonds >= costs[reviveCount]) {
+      const newDiamonds = diamonds - costs[reviveCount];
       setDiamonds(newDiamonds);
+      setReviveCount(prev => prev + 1);
       
       if (user) {
         try {
@@ -1102,6 +1111,19 @@ function GameContent() {
         }
       }
       playSound('score');
+    }
+  };
+
+  const updateAvatar = async (charId: string) => {
+    if (!user) return;
+    setAvatarId(charId);
+    setShowAvatarSelect(false);
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        avatarId: charId
+      }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
     }
   };
 
@@ -1869,6 +1891,36 @@ function GameContent() {
     <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 font-sans text-neutral-100">
       <div className="w-full max-w-[400px] bg-neutral-900 rounded-3xl shadow-2xl overflow-hidden border-4 border-neutral-800 relative">
         
+        {/* Avatar Selection Modal */}
+        {showAvatarSelect && (
+          <div className="absolute inset-0 z-[70] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col">
+              <div className="bg-[#ffb300] p-4 flex justify-between items-center">
+                <h2 className="text-2xl font-black text-white">选择头像</h2>
+                <button onClick={() => setShowAvatarSelect(false)} className="text-white hover:scale-110 transition-transform">
+                  <X size={32} strokeWidth={3} />
+                </button>
+              </div>
+              <div className="p-6 grid grid-cols-2 gap-4">
+                {unlockedCharacters.map(charId => (
+                  <button
+                    key={charId}
+                    onClick={() => updateAvatar(charId)}
+                    className={`p-2 rounded-2xl border-4 flex flex-col items-center gap-2 transition-all ${avatarId === charId ? 'bg-[#ffecb3] border-[#ffb300]' : 'bg-white border-gray-200 hover:border-[#ffe082]'}`}
+                  >
+                    <div className="w-20 h-20 bg-white rounded-xl border-2 border-gray-100 flex items-center justify-center overflow-hidden">
+                      <img src={getCharacterImage(charId)} alt={charId} className="h-full object-contain" />
+                    </div>
+                    <span className="text-sm font-black text-[#5d4037]">
+                      {charId === 'hdd' ? '呼大帝' : charId === 'santa' ? '圣诞老呼' : charId === 'hjdj' ? '海军大将' : '呼子'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Unlock Animation Modal */}
         <AnimatePresence>
           {unlockingChar && (
@@ -2187,42 +2239,39 @@ function GameContent() {
             <div className="absolute inset-0 flex flex-col items-center justify-between pb-8 pt-6 px-4 bg-gradient-to-b from-blue-900/90 to-emerald-900/90 backdrop-blur-sm">
               {/* Top Bar */}
               <div className="w-full flex justify-between items-start">
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleToggleMute}
-                    className="w-12 h-12 bg-[#f5e6c4] rounded-full flex items-center justify-center border-4 border-[#8d6e63] shadow-lg"
-                  >
-                    {isMutedState ? <VolumeX className="text-[#5d4037]" size={24} /> : <Volume2 className="text-[#5d4037]" size={24} />}
-                  </button>
-                  <button className="w-12 h-12 bg-[#f5e6c4] rounded-full flex items-center justify-center border-4 border-[#8d6e63] shadow-lg">
-                    <Settings className="text-[#5d4037]" size={24} />
-                  </button>
-                  {user ? (
-                    <button 
-                      onClick={logout}
-                      className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center border-4 border-red-400 shadow-lg overflow-hidden"
-                      title="退出登录"
+                <div className="flex items-center gap-2">
+                  {/* Player Profile Section */}
+                  <div className="flex items-center gap-2 bg-black/20 p-1 pr-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                    <div 
+                      className="w-16 h-16 rounded-lg border-2 border-yellow-500/50 overflow-hidden bg-[#f5e6c4] shadow-lg shrink-0 relative cursor-pointer"
+                      onClick={() => user && setShowAvatarSelect(true)}
                     >
-                      {user.photoURL ? <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" /> : <LogOut className="text-red-500" size={20} />}
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={loginGuest}
-                        className="px-4 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center border-4 border-emerald-400 shadow-lg font-bold text-sm"
-                        title="游客登录"
-                      >
-                        游客快速开始
-                      </button>
-                      <button 
-                        onClick={() => setShowAuthModal(true)}
-                        className="px-4 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center border-4 border-blue-400 shadow-lg font-bold text-sm"
-                        title="账号登录"
-                      >
-                        <LogIn className="mr-1" size={16} />
-                        账号登录
-                      </button>
+                      <img src={getCharacterImage(avatarId)} alt="avatar" className="w-full h-full object-contain" />
                     </div>
+                    <div className="flex flex-col justify-center">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-black text-sm drop-shadow-md">
+                          {user?.displayName || (user?.isAnonymous ? '游客' : (user ? '呼大帝' : '未登录'))}
+                        </span>
+                      </div>
+                      {user && (
+                        <button 
+                          onClick={logout}
+                          className="text-[10px] text-red-400 font-bold mt-0.5 hover:text-red-300"
+                        >
+                          退出登录
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {!user && (
+                    <button 
+                      onClick={() => setShowAuthModal(true)}
+                      className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md hover:bg-blue-600 transition-colors"
+                    >
+                      登录
+                    </button>
                   )}
                 </div>
                 <button className="w-12 h-12 bg-[#ef5350] rounded-full flex items-center justify-center border-4 border-[#ffcdd2] shadow-lg">
@@ -2465,12 +2514,12 @@ function GameContent() {
               <div className="flex flex-col gap-4 w-full px-10">
                 <button 
                   onClick={revive}
-                  disabled={diamonds < 50}
-                  className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < 50 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                  disabled={diamonds < [50, 100, 200][reviveCount]}
+                  className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < [50, 100, 200][reviveCount] ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
                   style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                 >
                   <span>复活</span>
-                  <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 50</span>
+                  <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 {[50, 100, 200][reviveCount]}</span>
                 </button>
 
                 <button 

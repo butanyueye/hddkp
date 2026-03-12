@@ -79,8 +79,8 @@ service cloud.firestore {
     }
 
     function isValidUserStats(data) {
-      return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters']) &&
+      return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -89,7 +89,8 @@ service cloud.firestore {
              isPositiveNumber('diamonds') &&
              isValidInventoryMap(data.inventory) &&
              isValidList('achievements', 100) &&
-             isValidList('unlockedCharacters', 10);
+             isValidList('unlockedCharacters', 10) &&
+             validStringLength('avatarId', 1, 50);
     }
 
     function isValidCheckIn(data) {
