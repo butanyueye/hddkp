@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
@@ -42,7 +42,9 @@ import {
   runTransaction,
   getDocs,
   where,
-  deleteDoc
+  deleteDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 
 const GRAVITY = 0.8;
@@ -423,6 +425,15 @@ function GameContent() {
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
 
+  // Friends & Custom Rooms state
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [friends, setFriends] = useState<string[]>([]);
+  const [allUsers, setAllUsers] = useState<{uid: string, name: string, avatarId: string}[]>([]);
+  const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string}[]>([]);
+  const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [isHost, setIsHost] = useState(false);
+  const [matchType, setMatchType] = useState<'random' | 'private'>('random');
+
   // --- Firebase Auth & Sync ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
@@ -440,6 +451,7 @@ function GameContent() {
             setAchievements(data.achievements || []);
             setUnlockedCharacters(data.unlockedCharacters || ['hdd']);
             setAvatarId(data.avatarId || 'hdd');
+            setFriends(data.friends || []);
           } else {
             // Initialize user doc
             const initialData = {
@@ -452,7 +464,8 @@ function GameContent() {
               inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
               achievements: [],
               unlockedCharacters: ['hdd'],
-              avatarId: 'hdd'
+              avatarId: 'hdd',
+              friends: []
             };
             await setDoc(doc(db, 'users', u.uid), initialData);
             setHighScore(0);
@@ -461,6 +474,7 @@ function GameContent() {
             setAchievements([]);
             setUnlockedCharacters(['hdd']);
             setAvatarId('hdd');
+            setFriends([]);
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
@@ -640,13 +654,198 @@ function GameContent() {
     }
   }, [achievements, user]);
 
-  const createNewMatch = async () => {
+  // Fetch all users for friends modal
+  useEffect(() => {
+    if (!showFriendsModal || !user) return;
+    
+    const fetchUsers = async () => {
+      try {
+        const q = query(collection(db, 'users'), limit(100));
+        const querySnapshot = await getDocs(q);
+        const usersList: any[] = [];
+        querySnapshot.forEach((doc) => {
+          if (doc.id !== user.uid) {
+            usersList.push({ uid: doc.id, ...doc.data() });
+          }
+        });
+        setAllUsers(usersList);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+    
+    fetchUsers();
+  }, [showFriendsModal, user]);
+
+  // Fetch friends data
+  useEffect(() => {
+    if (!showFriendsModal || !user || friends.length === 0) {
+      setFriendsData([]);
+      return;
+    }
+    
+    const fetchFriends = async () => {
+      try {
+        // Firestore 'in' query is limited to 10 items, so we might need to chunk it
+        // For simplicity, we'll just fetch the first 10 friends if there are more
+        const friendsToFetch = friends.slice(0, 10);
+        if (friendsToFetch.length === 0) return;
+        
+        const q = query(collection(db, 'users'), where('__name__', 'in', friendsToFetch));
+        const querySnapshot = await getDocs(q);
+        const friendsList: any[] = [];
+        querySnapshot.forEach((doc) => {
+          friendsList.push({ uid: doc.id, ...doc.data() });
+        });
+        setFriendsData(friendsList);
+      } catch (error) {
+        console.error("Error fetching friends data:", error);
+      }
+    };
+    
+    fetchFriends();
+  }, [showFriendsModal, user, friends]);
+
+  const addFriend = async (friendUid: string) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        friends: arrayUnion(friendUid)
+      }, { merge: true });
+      setFriends(prev => [...prev, friendUid]);
+    } catch (error) {
+      console.error("Error adding friend:", error);
+    }
+  };
+
+  const removeFriend = async (friendUid: string) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        friends: arrayRemove(friendUid)
+      }, { merge: true });
+      setFriends(prev => prev.filter(id => id !== friendUid));
+    } catch (error) {
+      console.error("Error removing friend:", error);
+    }
+  };
+
+  const createPrivateRoom = async () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setRoomCodeInput(code);
+    setIsHost(true);
+    setMatchType('private');
+    setMatchState('matching');
+    matchStateRef.current = 'matching';
+    setMatchmakingStatus('等待好友加入...');
+    setIsMultiplayer(true);
+    setMatchResult(null);
+    setOpponent(null);
+    setMatchId(null);
+    
+    await createNewMatch('private', code);
+  };
+
+  const joinPrivateRoom = async (code: string) => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    
+    if (!code || code.length !== 6) {
+      alert("请输入6位房间号");
+      return;
+    }
+    
+    setMatchType('private');
+    setMatchState('matching');
+    matchStateRef.current = 'matching';
+    setMatchmakingStatus('正在加入房间...');
+    setIsMultiplayer(true);
+    setMatchResult(null);
+    setOpponent(null);
+    setMatchId(null);
+    setIsHost(false);
+    
+    try {
+      const q = query(
+        collection(db, 'matches'), 
+        where('roomType', '==', 'private'),
+        where('roomId', '==', code),
+        where('status', '==', 'waiting'),
+        limit(1)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        alert("未找到该房间或房间已满");
+        setMatchState('none');
+        matchStateRef.current = 'none';
+        setIsMultiplayer(false);
+        return;
+      }
+      
+      const matchDoc = querySnapshot.docs[0];
+      const matchRef = doc(db, 'matches', matchDoc.id);
+      
+      let joined = false;
+      await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(matchRef);
+        if (!sfDoc.exists() || sfDoc.data().status !== 'waiting') {
+          throw new Error("Room no longer available");
+        }
+        
+        transaction.update(matchRef, {
+          status: 'ready', // Change to ready so host can start
+          player2: {
+            uid: user.uid,
+            name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+            score: 0,
+            status: 'playing',
+            character: selectedCharacter
+          }
+        });
+        joined = true;
+      });
+      
+      if (joined) {
+        setMatchId(matchDoc.id);
+        matchIdRef.current = matchDoc.id;
+        setMatchmakingStatus('已加入房间，等待房主开始...');
+      }
+    } catch (e) {
+      console.error("Join room error:", e);
+      alert("加入房间失败");
+      setMatchState('none');
+      matchStateRef.current = 'none';
+      setIsMultiplayer(false);
+    }
+  };
+
+  const startPrivateMatch = async () => {
+    if (!isHost || !matchId) return;
+    try {
+      await setDoc(doc(db, 'matches', matchId), {
+        status: 'playing'
+      }, { merge: true });
+    } catch (e) {
+      console.error("Start match error:", e);
+    }
+  };
+
+  const createNewMatch = async (type: 'random' | 'private' = 'random', roomId?: string) => {
     if (!user) return;
     try {
       const newMatchRef = doc(collection(db, 'matches'));
-      await setDoc(newMatchRef, {
+      const matchData: any = {
         status: 'waiting',
         createdAt: serverTimestamp(),
+        roomType: type,
         player1: {
           uid: user.uid,
           name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
@@ -654,7 +853,11 @@ function GameContent() {
           status: 'playing',
           character: selectedCharacter
         }
-      });
+      };
+      if (type === 'private' && roomId) {
+        matchData.roomId = roomId;
+      }
+      await setDoc(newMatchRef, matchData);
       createdMatchIdRef.current = newMatchRef.id;
       setMatchId(newMatchRef.id);
       matchIdRef.current = newMatchRef.id;
@@ -678,6 +881,7 @@ function GameContent() {
     }
     
     // Reset state
+    setMatchType('random');
     setMatchState('matching');
     matchStateRef.current = 'matching';
     setMatchmakingStatus('正在连接服务器...');
@@ -709,9 +913,10 @@ function GameContent() {
       const validDocs = querySnapshot.docs.filter(doc => {
         const data = doc.data();
         const isNotMe = data.player1?.uid !== user.uid;
+        const isRandom = data.roomType === 'random' || !data.roomType;
         const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
         const isRecent = Math.abs(Date.now() - createdAt) < 300000; // 5 minutes window to handle clock skew
-        return isNotMe && isRecent;
+        return isNotMe && isRecent && isRandom;
       });
       
       if (validDocs.length > 0) {
@@ -769,7 +974,8 @@ function GameContent() {
           const data = doc.data();
           return data.player1?.uid !== user.uid && 
                  data.status === 'waiting' && 
-                 (Date.now() - (data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now())) < 30000;
+                 (data.roomType === 'random' || !data.roomType) &&
+                 Math.abs(Date.now() - (data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now())) < 300000;
         }).length === 0;
 
         if (stillNoMatches) {
@@ -959,6 +1165,14 @@ function GameContent() {
           setOpponent(oppData);
         }
         
+        if (data.status === 'ready' && matchStateRef.current === 'matching') {
+          if (isPlayer1) {
+            setMatchmakingStatus('好友已加入，可以开始比赛！');
+          } else {
+            setMatchmakingStatus('已加入房间，等待房主开始...');
+          }
+        }
+        
         if (data.status === 'playing' && matchStateRef.current === 'matching') {
           console.log("Match Sync: Match found, transitioning to playing", matchId);
           // Match found, show VS screen!
@@ -1015,107 +1229,112 @@ function GameContent() {
     let pollInterval: NodeJS.Timeout;
 
     if (matchState === 'matching') {
-      timeout = setTimeout(() => {
-        if (matchStateRef.current === 'matching') {
-          setMatchMessage('匹配超时，请重试');
-          setMatchState('none');
-          matchStateRef.current = 'none';
-          setMatchId(null);
-          setIsMultiplayer(false);
-          
-          if (createdMatchIdRef.current) {
-            deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
-            createdMatchIdRef.current = null;
+      if (matchType === 'random') {
+        timeout = setTimeout(() => {
+          if (matchStateRef.current === 'matching') {
+            setMatchMessage('匹配超时，请重试');
+            setMatchState('none');
+            matchStateRef.current = 'none';
+            setMatchId(null);
+            setIsMultiplayer(false);
+            
+            if (createdMatchIdRef.current) {
+              deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
+              createdMatchIdRef.current = null;
+            }
           }
-        }
-      }, 60000); // 60 seconds timeout
+        }, 60000); // 60 seconds timeout
+      }
 
       // Poll every 3 seconds to see if there are other waiting matches we can join
-      pollInterval = setInterval(async () => {
-        if (matchStateRef.current !== 'matching' || !user) return;
-        
-        // If we already joined a match (but haven't transitioned to 'vs' yet), don't poll
-        if (matchIdRef.current && matchIdRef.current !== createdMatchIdRef.current) return;
-        
-        setMatchmakingStatus(prev => prev === '正在扩大搜索范围...' ? '正在等待对手加入...' : '正在扩大搜索范围...');
-        
-        try {
-          const q = query(
-            collection(db, 'matches'), 
-            where('status', '==', 'waiting'), 
-            limit(10)
-          );
-          const querySnapshot = await getDocs(q);
+      if (matchType === 'random') {
+        pollInterval = setInterval(async () => {
+          if (matchStateRef.current !== 'matching' || !user) return;
           
-          const validDocs = querySnapshot.docs.filter(doc => {
-            const data = doc.data();
-            const isNotMe = data.player1?.uid !== user.uid;
-            const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
-            const isRecent = Math.abs(Date.now() - createdAt) < 300000;
-            
-            // Only join if the other match has a smaller ID than ours
-            // This prevents two players from joining each other's matches simultaneously
-            let isOlder = true;
-            if (createdMatchIdRef.current) {
-               isOlder = doc.id < createdMatchIdRef.current;
-            }
-            
-            return isNotMe && isRecent && isOlder;
-          });
+          // If we already joined a match (but haven't transitioned to 'vs' yet), don't poll
+          if (matchIdRef.current && matchIdRef.current !== createdMatchIdRef.current) return;
           
-          if (validDocs.length > 0) {
-            // Sort by newest first
-            validDocs.sort((a, b) => {
-              const timeA = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : 0;
-              const timeB = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : 0;
-              return timeB - timeA;
-            });
+          setMatchmakingStatus(prev => prev === '正在扩大搜索范围...' ? '正在等待对手加入...' : '正在扩大搜索范围...');
+          
+          try {
+            const q = query(
+              collection(db, 'matches'), 
+              where('status', '==', 'waiting'), 
+              limit(10)
+            );
+            const querySnapshot = await getDocs(q);
             
-            const matchDoc = validDocs[0];
-            const matchRef = doc(db, 'matches', matchDoc.id);
-            
-            let joined = false;
-            await runTransaction(db, async (transaction) => {
-              const sfDoc = await transaction.get(matchRef);
-              if (!sfDoc.exists() || sfDoc.data().status !== 'waiting') {
-                return; // Can't join
+            const validDocs = querySnapshot.docs.filter(doc => {
+              const data = doc.data();
+              const isNotMe = data.player1?.uid !== user.uid;
+              const isRandom = data.roomType === 'random' || !data.roomType;
+              const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+              const isRecent = Math.abs(Date.now() - createdAt) < 300000;
+              
+              // Only join if the other match has a smaller ID than ours
+              // This prevents two players from joining each other's matches simultaneously
+              let isOlder = true;
+              if (createdMatchIdRef.current) {
+                 isOlder = doc.id < createdMatchIdRef.current;
               }
               
-              transaction.update(matchRef, {
-                status: 'playing',
-                player2: {
-                  uid: user.uid,
-                  name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
-                  score: 0,
-                  status: 'playing',
-                  character: selectedCharacter
-                }
-              });
-              joined = true;
+              return isNotMe && isRecent && isOlder && isRandom;
             });
             
-            if (joined) {
-              console.log("Matchmaking Polling: Successfully joined match", matchDoc.id);
-              setMatchId(matchDoc.id);
-              matchIdRef.current = matchDoc.id;
-              // Delete our own waiting match if we had one
-              if (createdMatchIdRef.current) {
-                deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
-                createdMatchIdRef.current = null;
+            if (validDocs.length > 0) {
+              // Sort by newest first
+              validDocs.sort((a, b) => {
+                const timeA = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : 0;
+                const timeB = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : 0;
+                return timeB - timeA;
+              });
+              
+              const matchDoc = validDocs[0];
+              const matchRef = doc(db, 'matches', matchDoc.id);
+              
+              let joined = false;
+              await runTransaction(db, async (transaction) => {
+                const sfDoc = await transaction.get(matchRef);
+                if (!sfDoc.exists() || sfDoc.data().status !== 'waiting') {
+                  return; // Can't join
+                }
+                
+                transaction.update(matchRef, {
+                  status: 'playing',
+                  player2: {
+                    uid: user.uid,
+                    name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+                    score: 0,
+                    status: 'playing',
+                    character: selectedCharacter
+                  }
+                });
+                joined = true;
+              });
+              
+              if (joined) {
+                console.log("Matchmaking Polling: Successfully joined match", matchDoc.id);
+                setMatchId(matchDoc.id);
+                matchIdRef.current = matchDoc.id;
+                // Delete our own waiting match if we had one
+                if (createdMatchIdRef.current) {
+                  deleteDoc(doc(db, 'matches', createdMatchIdRef.current)).catch(console.error);
+                  createdMatchIdRef.current = null;
+                }
               }
             }
+          } catch (e) {
+            console.error("Polling error", e);
           }
-        } catch (e) {
-          console.error("Polling error", e);
-        }
-      }, 3000);
+        }, 3000);
+      }
     }
     
     return () => {
       clearTimeout(timeout);
       clearInterval(pollInterval);
     };
-  }, [matchState, user, selectedCharacter]);
+  }, [matchState, user, selectedCharacter, matchType]);
 
   const activateHzSkill = useCallback(() => {
     if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 3) {
@@ -2198,6 +2417,121 @@ function GameContent() {
           </div>
         )}
 
+        {/* Friends Modal */}
+        {showFriendsModal && (
+          <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="bg-blue-600 p-4 flex justify-between items-center">
+                <h2 className="text-2xl font-black text-white">好友 & 房间</h2>
+                <button onClick={() => setShowFriendsModal(false)} className="text-white hover:scale-110 transition-transform">
+                  <X size={32} strokeWidth={3} />
+                </button>
+              </div>
+              
+              <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+                {/* Room Section */}
+                <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-200">
+                  <h3 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                    <Play size={18} /> 自定义房间
+                  </h3>
+                  <div className="flex gap-2 mb-3">
+                    <button 
+                      onClick={createPrivateRoom}
+                      className="flex-1 bg-blue-500 text-white font-bold py-2 rounded-xl shadow-[0_4px_0_#1d4ed8] active:translate-y-1 active:shadow-none transition-all"
+                    >
+                      创建房间
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="输入6位房间号" 
+                      value={roomCodeInput}
+                      onChange={(e) => setRoomCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="flex-1 border-2 border-blue-200 rounded-xl px-3 py-2 font-mono text-center text-blue-900 bg-white"
+                    />
+                    <button 
+                      onClick={() => joinPrivateRoom(roomCodeInput)}
+                      className="bg-green-500 text-white font-bold px-4 py-2 rounded-xl shadow-[0_4px_0_#15803d] active:translate-y-1 active:shadow-none transition-all"
+                    >
+                      加入
+                    </button>
+                  </div>
+                </div>
+
+                {/* Friends List */}
+                <div>
+                  <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
+                    <Users size={18} /> 我的好友 ({friendsData.length})
+                  </h3>
+                  {friendsData.length === 0 ? (
+                    <p className="text-gray-400 text-sm text-center py-4 bg-gray-50 rounded-xl border border-gray-100">暂无好友，快去添加吧！</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {friendsData.map(friend => (
+                        <div key={friend.uid} className="flex items-center justify-between bg-white border-2 border-gray-100 p-2 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
+                              {friend.avatarId ? (
+                                <img src={getCharacterImage(friend.avatarId)} alt="avatar" className="w-full h-full object-contain" />
+                              ) : (
+                                <Users size={16} className="text-gray-400" />
+                              )}
+                            </div>
+                            <span className="font-bold text-gray-700 text-sm">{friend.name}</span>
+                          </div>
+                          <button 
+                            onClick={() => removeFriend(friend.uid)}
+                            className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded-lg hover:bg-red-100"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* All Users List */}
+                <div>
+                  <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
+                    <Users size={18} /> 所有玩家
+                  </h3>
+                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                    {allUsers.filter(u => u.uid !== user?.uid).map(u => {
+                      const isFriend = friends.includes(u.uid);
+                      return (
+                        <div key={u.uid} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-2 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-white rounded-full overflow-hidden flex items-center justify-center border border-gray-200">
+                              {u.avatarId ? (
+                                <img src={getCharacterImage(u.avatarId)} alt="avatar" className="w-full h-full object-contain" />
+                              ) : (
+                                <Users size={16} className="text-gray-400" />
+                              )}
+                            </div>
+                            <span className="font-bold text-gray-700 text-sm truncate max-w-[100px]">{u.name}</span>
+                          </div>
+                          {isFriend ? (
+                            <span className="text-gray-400 text-xs font-bold px-2 py-1 bg-gray-200 rounded-lg">已添加</span>
+                          ) : (
+                            <button 
+                              onClick={() => addFriend(u.uid)}
+                              className="text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 border border-blue-200"
+                            >
+                              添加
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mute Button */}
         <button 
           onClick={() => {
@@ -2472,6 +2806,19 @@ function GameContent() {
                       <Package className="text-yellow-800" size={28} />
                     </button>
                     <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>商店</span>
+                  </div>
+                </div>
+
+                {/* Right Side Buttons */}
+                <div className="absolute right-0 top-0 flex flex-col gap-6 z-20">
+                  <div className="flex flex-col items-center">
+                    <button 
+                      onClick={() => setShowFriendsModal(true)}
+                      className="w-14 h-14 bg-blue-400 rounded-2xl flex items-center justify-center border-4 border-blue-200 shadow-lg transform -rotate-3"
+                    >
+                      <Users className="text-white" size={28} />
+                    </button>
+                    <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>好友</span>
                   </div>
                 </div>
 
@@ -2755,8 +3102,26 @@ function GameContent() {
                 </div>
                 
                 <h2 className="text-3xl font-black text-white mb-8 tracking-wider relative z-10" style={{ textShadow: '0 0 10px #818cf8' }}>
-                  寻找对手中...
+                  {matchType === 'private' ? '自定义房间' : '寻找对手中...'}
                 </h2>
+                
+                {matchType === 'private' && isHost && (
+                  <div className="mb-6 bg-white/10 p-4 rounded-xl border border-white/20 text-center relative z-10">
+                    <p className="text-white text-sm mb-2">房间号</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-3xl font-mono font-black text-[#818cf8] tracking-widest">{roomCodeInput}</span>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(roomCodeInput);
+                          alert('房间号已复制');
+                        }}
+                        className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                      >
+                        <Copy size={16} className="text-white" />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="relative w-32 h-32 mb-8 z-10">
                   <div className="absolute inset-0 border-4 border-t-[#818cf8] border-r-transparent border-b-[#818cf8] border-l-transparent rounded-full animate-spin"></div>
@@ -2766,9 +3131,18 @@ function GameContent() {
                   </div>
                 </div>
                 
-                <p className="text-[#c7d2fe] font-medium text-center relative z-10 animate-pulse">
+                <p className="text-[#c7d2fe] font-medium text-center relative z-10 animate-pulse mb-6">
                   {matchmakingStatus}
                 </p>
+                
+                {matchType === 'private' && isHost && matchmakingStatus.includes('可以开始比赛') && (
+                  <button 
+                    onClick={startPrivateMatch}
+                    className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-black rounded-xl shadow-[0_4px_0_#15803d] active:translate-y-1 active:shadow-none transition-all mb-4 relative z-10"
+                  >
+                    开始比赛
+                  </button>
+                )}
                 
                 <button 
                   onClick={async () => {

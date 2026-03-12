@@ -81,7 +81,7 @@ service cloud.firestore {
 
     function isValidUserStats(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -91,7 +91,8 @@ service cloud.firestore {
              isValidInventoryMap(data.inventory) &&
              isValidList('achievements', 100) &&
              (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
-             (!('avatarId' in data) || validStringLength('avatarId', 1, 50));
+             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
+             (!('friends' in data) || isValidList('friends', 1000));
     }
 
     function isValidCheckIn(data) {
@@ -117,7 +118,9 @@ service cloud.firestore {
              data.createdAt is timestamp &&
              isValidPlayerObj(data.player1) &&
              (!('player2' in data) || data.player2 == null || isValidPlayerObj(data.player2)) &&
-             (!('winner' in data) || data.winner == null || data.winner is string);
+             (!('winner' in data) || data.winner == null || data.winner is string) &&
+             (!('roomType' in data) || data.roomType in ['random', 'private']) &&
+             (!('roomId' in data) || data.roomId is string);
     }
 
     // ===============================================================
