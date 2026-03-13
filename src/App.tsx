@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
@@ -393,9 +393,12 @@ function GameContent() {
   const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte'>('hdd');
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [showGachaResultModal, setShowGachaResultModal] = useState(false);
+  const [gachaResult, setGachaResult] = useState<{fragments: number, items: Record<string, number>}>({fragments: 0, items: {}});
   const [checkInCount, setCheckInCount] = useState(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const [checkInMessage, setCheckInMessage] = useState('');
+  const [hgteFragments, setHgteFragments] = useState(0);
   
   // Multiplayer state
   const [matchState, setMatchState] = useState<'none' | 'matching' | 'vs' | 'playing' | 'finished'>('none');
@@ -488,17 +491,34 @@ function GameContent() {
             const data = userDoc.data();
             setHighScore(data.highScore || 0);
             setDiamonds(data.diamonds || 0);
-            setInventory(data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 });
+            const loadedInventory = data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 };
+            const cappedInventory = {
+              shield: Math.min(loadedInventory.shield || 0, 5),
+              magnet: Math.min(loadedInventory.magnet || 0, 5),
+              doubleScore: Math.min(loadedInventory.doubleScore || 0, 5),
+              dash: Math.min(loadedInventory.dash || 0, 5),
+            };
+            setInventory(cappedInventory);
             setAchievements(data.achievements || []);
             
             const loadedUnlocked = data.unlockedCharacters || ['hdd'];
-            if (!loadedUnlocked.includes('hgte')) {
-              loadedUnlocked.push('hgte');
+            const hgteFragments = data.hgteFragments || 0;
+            
+            // Strictly enforce: only unlock hgte if fragments >= 78
+            let finalUnlocked = loadedUnlocked.filter(id => id !== 'hgte');
+            if (hgteFragments >= 78) {
+              finalUnlocked.push('hgte');
             }
-            setUnlockedCharacters(loadedUnlocked);
+            setUnlockedCharacters(finalUnlocked);
+            
+            // Persist changes if they differ from database
+            if (JSON.stringify(finalUnlocked) !== JSON.stringify(loadedUnlocked)) {
+              await updateDoc(doc(db, 'users', u.uid), { unlockedCharacters: finalUnlocked });
+            }
             
             setAvatarId(data.avatarId || 'hdd');
             setFriends(data.friends || []);
+            setHgteFragments(hgteFragments);
           } else {
             // Initialize user doc
             const initialData = {
@@ -510,7 +530,8 @@ function GameContent() {
               diamonds: 200,
               inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
               achievements: [],
-              unlockedCharacters: ['hdd', 'hgte'],
+              unlockedCharacters: ['hdd'],
+              hgteFragments: 0,
               avatarId: 'hdd',
               friends: []
             };
@@ -520,6 +541,7 @@ function GameContent() {
             setInventory(initialData.inventory);
             setAchievements([]);
             setUnlockedCharacters(['hdd']);
+            setHgteFragments(0);
             setAvatarId('hdd');
             setFriends([]);
           }
@@ -704,6 +726,70 @@ function GameContent() {
     } catch (error) {
       console.error("Logout failed", error);
     }
+  };
+
+  const handleGacha = async (count: number) => {
+    const cost = count === 10 ? 800 : 91;
+    if (diamonds < cost) {
+      alert('钻石不足！');
+      return;
+    }
+    
+    setDiamonds(prev => prev - cost);
+    
+    let fragmentsGained = 0;
+    const newInv = { ...inventory };
+    
+    for (let i = 0; i < count; i++) {
+      const roll = Math.random();
+      if (roll < 0.2) {
+        fragmentsGained += 1;
+      } else {
+        const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
+        const randomType = types[Math.floor(Math.random() * types.length)];
+        newInv[randomType] = (newInv[randomType] || 0) + 1;
+      }
+    }
+    
+    let newFragments = hgteFragments + fragmentsGained;
+    let newUnlocked = [...unlockedCharacters];
+    if (newFragments >= 78 && !newUnlocked.includes('hgte')) {
+      newUnlocked.push('hgte');
+      setUnlockedCharacters(newUnlocked);
+      alert('恭喜合成呼刚帝尔角色！');
+      newFragments -= 78;
+    }
+    setHgteFragments(newFragments);
+    setInventory(newInv);
+    
+    if (user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          diamonds: diamonds - cost,
+          inventory: newInv,
+          hgteFragments: newFragments,
+          unlockedCharacters: newUnlocked
+        }, { merge: true });
+      } catch (error) {
+        console.error("Gacha update error:", error);
+        // If update fails, revert state
+        setDiamonds(diamonds);
+        setHgteFragments(hgteFragments);
+        setInventory(inventory);
+        setUnlockedCharacters(unlockedCharacters);
+        alert('数据同步失败，请检查网络连接。');
+        return;
+      }
+    }
+    
+    const itemsGained: Record<string, number> = {};
+    Object.entries(newInv).forEach(([k, v]) => {
+      const diff = v - (inventory[k as PowerUpType] || 0);
+      if (diff > 0) itemsGained[k] = diff;
+    });
+    
+    setGachaResult({ fragments: fragmentsGained, items: itemsGained });
+    setShowGachaResultModal(true);
   };
 
   const checkAchievements = useCallback(async (currentScore: number) => {
@@ -1909,7 +1995,9 @@ function GameContent() {
           const randomType = types[Math.floor(Math.random() * types.length)];
           
           setInventory(prev => {
-            const newInv = { ...prev, [randomType]: prev[randomType] + 1 };
+            const currentAmount = prev[randomType] || 0;
+            if (currentAmount >= 5) return prev; // Cap at 5
+            const newInv = { ...prev, [randomType]: currentAmount + 1 };
             if (user) {
               setDoc(doc(db, 'users', user.uid), { inventory: newInv }, { merge: true }).catch(err => console.error(err));
             }
@@ -2696,6 +2784,31 @@ function GameContent() {
           )}
         </AnimatePresence>
 
+        {/* Gacha Result Modal */}
+        {showGachaResultModal && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center">
+              <div className="w-full flex justify-between items-center mb-4">
+                <h2 className="text-3xl font-black text-[#e65100]">抽奖结果</h2>
+                <button onClick={() => setShowGachaResultModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
+              </div>
+              <div className="text-xl font-bold text-[#5d4037] mb-4">获得碎片：<span className="text-blue-600 font-black text-2xl">{gachaResult.fragments}</span></div>
+              <div className="w-full text-center">
+                <p className="text-[#d84315] font-bold text-sm mb-2">获得道具：</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(gachaResult.items).map(([key, count]) => (
+                    <div key={key} className="bg-white p-2 rounded-xl border border-[#ffe082] flex items-center justify-center gap-2">
+                      <span className="text-2xl">{POWERUP_CONFIG[key as PowerUpType].icon}</span>
+                      <span className="font-black text-lg text-[#e65100]">x{count}</span>
+                    </div>
+                  ))}
+                  {Object.keys(gachaResult.items).length === 0 && <p className="text-gray-500 text-sm">无</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Check-in Modal */}
         {showCheckInModal && (
           <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
@@ -3188,6 +3301,15 @@ function GameContent() {
                     </button>
                     <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>好友</span>
                   </div>
+                  <div className="flex flex-col items-center">
+                    <button 
+                      onClick={() => setGameState('gacha')}
+                      className="w-14 h-14 bg-red-500 rounded-2xl flex items-center justify-center border-4 border-red-200 shadow-lg transform rotate-3"
+                    >
+                      <Star className="text-white" size={28} />
+                    </button>
+                    <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>限定池</span>
+                  </div>
                 </div>
 
                 {/* Character */}
@@ -3306,11 +3428,16 @@ function GameContent() {
                     const isUnlocked = unlockedCharacters.includes(char.id);
                     const canUnlock = highScore >= CHARACTER_REQUIREMENTS[char.id];
                     const reqScore = CHARACTER_REQUIREMENTS[char.id];
+                    const isHgte = char.id === 'hgte';
 
                     return (
                       <div 
                         key={char.id}
                         onClick={() => { 
+                          if (isHgte && !isUnlocked) {
+                            alert('未拥有呼刚帝尔角色，请前往限定池获取！');
+                            return;
+                          }
                           if (isUnlocked) {
                             playSound('score'); 
                             setSelectedCharacter(char.id as any); 
@@ -3325,9 +3452,9 @@ function GameContent() {
                         {!isUnlocked && (
                           <div className="absolute inset-0 z-20 bg-black/10 flex flex-col items-center justify-center rounded-xl backdrop-blur-[1px]">
                             <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
-                              <Lock size={10} /> 需达到 {reqScore} 分
+                              <Lock size={10} /> {isHgte ? `碎片 ${hgteFragments}/78` : `需达到 ${reqScore} 分`}
                             </div>
-                            {canUnlock && (
+                            {canUnlock && !isHgte && (
                               <button 
                                 onClick={(e) => { e.stopPropagation(); unlockCharacter(char.id); }}
                                 className="bg-green-500 text-white px-4 py-1 rounded-full text-xs font-black shadow-[0_4px_0_#2e7d32] active:translate-y-1 active:shadow-none animate-bounce"
@@ -3690,13 +3817,15 @@ function GameContent() {
                           onClick={() => buyItem(type)}
                           disabled={diamonds < item.cost}
                           className={`w-full py-1.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                            diamonds >= item.cost 
-                              ? 'bg-blue-500 text-white shadow-[0_3px_0_#1d4ed8] active:translate-y-1 active:shadow-none' 
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                diamonds >= item.cost 
+                                ? 'bg-blue-500 text-white shadow-[0_3px_0_#1d4ed8] active:translate-y-1 active:shadow-none' 
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                           }`}
                         >
-                          <span>💎 {item.cost}</span>
-                          <span className="border-l border-white/20 pl-2">购买</span>
+                          <>
+                            <span>💎 {item.cost}</span>
+                            <span className="border-l border-white/20 pl-2">购买</span>
+                          </>
                         </button>
                       </div>
                     </div>
@@ -3828,6 +3957,35 @@ function GameContent() {
                   >
                     {authMode === 'login' ? '立即注册' : '返回登录'}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Gacha Screen */}
+          {gameState === 'gacha' && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-[#fff8e1] p-6 rounded-3xl border-4 border-[#ffb300] shadow-2xl w-full max-w-md relative">
+                <button onClick={() => setGameState('start')} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+                  <X size={24} />
+                </button>
+                <h2 className="text-3xl font-black text-[#e65100] mb-4 text-center">限定召唤</h2>
+                <div className="w-full h-48 bg-gradient-to-b from-yellow-100 to-yellow-300 rounded-2xl mb-4 flex items-center justify-center border-4 border-white shadow-inner">
+                  <img src={getCharacterImage('hgte')} alt="限定角色" className="h-40 object-contain" />
+                </div>
+                <div className="bg-white p-4 rounded-2xl mb-4 border-2 border-[#ffe082]">
+                  <h3 className="font-bold text-[#5d4037] mb-2">奖池预览</h3>
+                  <div className="grid grid-cols-5 gap-2 text-center text-[10px]">
+                    {['护盾', '磁铁', '双倍积分', '冲刺', '碎片'].map((item, i) => (
+                      <div key={i} className="bg-gray-100 p-2 rounded-lg font-bold text-[#795548]">
+                        {item}<br/>20%
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={() => handleGacha(1)} className="flex-1 bg-blue-500 text-white font-black py-3 rounded-2xl">单抽 91💎</button>
+                  <button onClick={() => handleGacha(10)} className="flex-1 bg-red-500 text-white font-black py-3 rounded-2xl">十连 800💎</button>
                 </div>
               </div>
             </div>
