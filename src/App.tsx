@@ -430,6 +430,7 @@ function GameContent() {
   const [friends, setFriends] = useState<string[]>([]);
   const [allUsers, setAllUsers] = useState<{uid: string, name: string, avatarId: string}[]>([]);
   const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string}[]>([]);
+  const [pendingInvitation, setPendingInvitation] = useState<any>(null);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [matchType, setMatchType] = useState<'random' | 'private'>('random');
@@ -677,41 +678,41 @@ function GameContent() {
     fetchUsers();
   }, [showFriendsModal, user]);
 
-  // Fetch friends data
+  // Listen for invitations
   useEffect(() => {
-    if (!showFriendsModal || !user || friends.length === 0) {
-      setFriendsData([]);
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'matches'),
+      where('invitedFriendUid', '==', user.uid),
+      where('status', '==', 'waiting')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setPendingInvitation({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      } else {
+        setPendingInvitation(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const inviteFriend = async (friendUid: string) => {
+    if (!matchId) {
+      alert("请先创建房间！");
       return;
     }
-    
-    const fetchFriends = async () => {
-      try {
-        if (friends.length === 0) {
-          setFriendsData([]);
-          return;
-        }
-        
-        // Firestore 'in' query is limited to 30 items
-        const chunkSize = 30;
-        const friendsList: any[] = [];
-        
-        for (let i = 0; i < friends.length; i += chunkSize) {
-          const chunk = friends.slice(i, i + chunkSize);
-          const q = query(collection(db, 'users'), where('__name__', 'in', chunk));
-          const querySnapshot = await getDocs(q);
-          querySnapshot.forEach((doc) => {
-            friendsList.push({ uid: doc.id, ...doc.data() });
-          });
-        }
-        
-        setFriendsData(friendsList);
-      } catch (error) {
-        console.error("Error fetching friends data:", error);
-      }
-    };
-    
-    fetchFriends();
-  }, [showFriendsModal, user, friends]);
+    try {
+      await setDoc(doc(db, 'matches', matchId), {
+        invitedFriendUid: friendUid
+      }, { merge: true });
+      alert("邀请已发送！");
+    } catch (error) {
+      console.error("Error inviting friend:", error);
+    }
+  };
 
   const addFriend = async (friendUid: string) => {
     if (!user) return;
@@ -2428,25 +2429,25 @@ function GameContent() {
 
         {/* Friends Modal */}
         {showFriendsModal && (
-          <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
-            <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
-              <div className="bg-purple-900 p-6 flex justify-between items-center">
-                <h2 className="text-2xl font-black text-white tracking-tight">好友与房间</h2>
-                <button onClick={() => setShowFriendsModal(false)} className="text-purple-400 hover:text-white transition-colors">
-                  <X size={28} />
+          <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-[#FFFDF0] w-full max-w-md rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
+              <div className="p-6 flex justify-between items-center bg-[#FFFDF0]">
+                <h2 className="text-3xl font-black text-[#A65D2C] tracking-tight">好友与房间</h2>
+                <button onClick={() => setShowFriendsModal(false)} className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md">
+                  <X size={24} />
                 </button>
               </div>
               
-              <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+              <div className="p-6 flex flex-col gap-6 overflow-y-auto bg-gradient-to-b from-purple-50/50 to-white">
                 {/* Room Section */}
-                <div className="bg-purple-50 p-5 rounded-2xl border border-purple-200">
-                  <h3 className="font-bold text-zinc-900 mb-4 flex items-center gap-2 text-lg">
-                    <Play size={20} className="text-purple-600" /> 自定义房间
+                <div className="bg-white p-5 rounded-2xl border-2 border-[#FAD689] shadow-inner">
+                  <h3 className="font-bold text-[#A65D2C] mb-4 flex items-center gap-2 text-lg">
+                    <Play size={20} className="text-[#4CAF50]" /> 自定义房间
                   </h3>
                   <div className="flex gap-3 mb-4">
                     <button 
                       onClick={createPrivateRoom}
-                      className="flex-1 bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 active:scale-95 transition-all shadow-md"
+                      className="flex-1 bg-[#4CAF50] text-white font-bold py-3 rounded-xl hover:bg-[#45A049] active:scale-95 transition-all shadow-md"
                     >
                       创建房间
                     </button>
@@ -2457,11 +2458,11 @@ function GameContent() {
                       placeholder="输入6位房间号" 
                       value={roomCodeInput}
                       onChange={(e) => setRoomCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="flex-1 border-2 border-purple-200 rounded-xl px-4 py-3 font-mono text-center text-zinc-900 bg-white focus:border-purple-500 focus:outline-none"
+                      className="flex-1 border-2 border-[#FAD689] rounded-xl px-4 py-3 font-mono text-center text-[#A65D2C] bg-white focus:border-[#4CAF50] focus:outline-none"
                     />
                     <button 
                       onClick={() => joinPrivateRoom(roomCodeInput)}
-                      className="bg-purple-500 text-white font-bold px-6 py-3 rounded-xl hover:bg-purple-600 active:scale-95 transition-all shadow-md"
+                      className="bg-[#FAD689] text-[#A65D2C] font-bold px-6 py-3 rounded-xl hover:bg-[#F9C75C] active:scale-95 transition-all shadow-md"
                     >
                       加入
                     </button>
@@ -2470,34 +2471,43 @@ function GameContent() {
 
                 {/* Friends List */}
                 <div>
-                  <h3 className="font-bold text-zinc-900 mb-3 flex items-center gap-2 text-lg">
-                    <Users size={20} className="text-purple-500" /> 我的好友 ({friendsData.length})
+                  <h3 className="font-bold text-[#A65D2C] mb-3 flex items-center gap-2 text-lg">
+                    <Users size={20} className="text-[#4CAF50]" /> 我的好友 ({friendsData.length})
                   </h3>
                   {friendsData.length === 0 ? (
-                    <div className="text-purple-500 text-sm text-center py-8 bg-purple-50 rounded-2xl border border-dashed border-purple-300">
+                    <div className="text-[#A65D2C] text-sm text-center py-8 bg-white rounded-2xl border-2 border-dashed border-[#FAD689]">
                       暂无好友，快去添加吧！
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {friendsData.map(friend => (
-                        <div key={friend.uid} className="flex items-center justify-between bg-white border border-purple-200 p-3 rounded-2xl hover:border-purple-300 transition-colors">
+                        <div key={friend.uid} className="flex items-center justify-between bg-white border-2 border-[#FAD689] p-3 rounded-2xl hover:border-[#4CAF50] transition-all shadow-sm">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-purple-50 rounded-full overflow-hidden flex items-center justify-center border border-purple-200">
+                            <div className="w-10 h-10 bg-[#FFFDF0] rounded-full overflow-hidden flex items-center justify-center border-2 border-[#4CAF50]">
                               {friend.avatarId ? (
                                 <img src={getCharacterImage(friend.avatarId)} alt="avatar" className="w-full h-full object-contain" />
                               ) : (
-                                <Users size={20} className="text-purple-400" />
+                                <Users size={20} className="text-[#4CAF50]" />
                               )}
                             </div>
-                            <span className="font-semibold text-zinc-800">{friend.name}</span>
+                            <span className="font-semibold text-[#A65D2C]">{friend.name}</span>
                           </div>
-                          <button 
-                            onClick={() => removeFriend(friend.uid)}
-                            className="text-purple-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all"
-                            title="删除好友"
-                          >
-                            <X size={18} />
-                          </button>
+                          <div className="flex gap-1">
+                            <button 
+                              onClick={() => inviteFriend(friend.uid)}
+                              className="text-[#4CAF50] hover:bg-[#E8F5E9] p-2 rounded-lg transition-all"
+                              title="邀请加入房间"
+                            >
+                              <Play size={18} />
+                            </button>
+                            <button 
+                              onClick={() => removeFriend(friend.uid)}
+                              className="text-[#A65D2C]/50 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all"
+                              title="删除好友"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
