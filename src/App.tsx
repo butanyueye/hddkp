@@ -483,17 +483,6 @@ function GameContent() {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
         }
 
-        // Listen for invitations
-        const q = query(collection(db, 'invitations'), where('toUid', '==', u.uid), where('status', '==', 'pending'));
-        const unsubscribeInv = onSnapshot(q, (snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === 'added') {
-              const data = change.doc.data();
-              setPendingInvitation({ id: change.doc.id, ...data });
-            }
-          });
-        });
-        
         // Fetch check-in data
         try {
           const checkInDoc = await getDoc(doc(db, 'checkIn', u.uid));
@@ -549,6 +538,32 @@ function GameContent() {
 
     return () => unsubscribe();
   }, []);
+
+  // Invitation Listener
+  useEffect(() => {
+    if (!user) return;
+    
+    const q = query(
+      collection(db, 'invitations'), 
+      where('toUid', '==', user.uid), 
+      where('status', '==', 'pending')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Only show invitations if we are not currently in a match
+      if (matchStateRef.current === 'none') {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            console.log("New invitation received:", data);
+            setPendingInvitation({ id: change.doc.id, ...data });
+          }
+        });
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [user]);
 
   // --- Leaderboard Real-time Sync ---
   useEffect(() => {
@@ -772,6 +787,92 @@ function GameContent() {
     } catch (error) {
       console.error("Error inviting friend:", error);
       alert("邀请发送失败");
+    }
+  };
+
+  const handleAcceptInvitation = async (invitation: any) => {
+    if (!user || !invitation) {
+      console.error("Cannot accept invitation: user or invitation missing", { user: !!user, invitation: !!invitation });
+      return;
+    }
+    
+    console.log("Accepting invitation:", invitation);
+    
+    try {
+      // Set initial state for joining
+      setMatchType('private');
+      setMatchState('matching');
+      matchStateRef.current = 'matching';
+      setMatchmakingStatus('正在加入房间...');
+      setIsMultiplayer(true);
+      setMatchResult(null);
+      setOpponent(null);
+      setIsHost(false);
+      setGameState('start'); // Ensure we are on the main menu to see the modal
+      
+      const matchRef = doc(db, 'matches', invitation.matchId);
+      
+      let joined = false;
+      await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(matchRef);
+        if (!sfDoc.exists()) {
+          throw new Error("房间已不存在");
+        }
+        
+        const matchData = sfDoc.data();
+        if (matchData.status !== 'waiting') {
+          throw new Error("房间已开始或已结束");
+        }
+        
+        if (matchData.player2) {
+          throw new Error("房间已满");
+        }
+        
+        // Join the match
+        transaction.update(matchRef, {
+          player2: {
+            uid: user.uid,
+            name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+            score: 0,
+            status: 'playing',
+            character: selectedCharacter
+          },
+          status: 'ready' // Mark as ready for host to start
+        });
+        
+        joined = true;
+      });
+      
+      if (joined) {
+        console.log("Successfully joined match:", invitation.matchId);
+        setMatchId(invitation.matchId);
+        matchIdRef.current = invitation.matchId;
+        setMatchmakingStatus('已加入房间，等待房主开始...');
+        
+        // Update invitation status
+        await updateDoc(doc(db, 'invitations', invitation.id), { status: 'accepted' });
+        
+        // Close invitation modal
+        setPendingInvitation(null);
+      }
+    } catch (error: any) {
+      console.error("Error accepting invitation:", error);
+      alert("加入房间失败: " + (error.message || "未知错误"));
+      
+      setMatchState('none');
+      matchStateRef.current = 'none';
+      setIsMultiplayer(false);
+      setMatchId(null);
+      
+      // Update invitation status to rejected if failed
+      try {
+        await updateDoc(doc(db, 'invitations', invitation.id), { status: 'rejected' });
+      } catch (e) {
+        console.error("Failed to update invitation status:", e);
+      }
+      
+      // Close invitation modal even on failure
+      setPendingInvitation(null);
     }
   };
 
@@ -3549,13 +3650,7 @@ function GameContent() {
                 <p className="text-[#A65D2C] mb-6">{pendingInvitation.fromName} 邀请你加入房间！</p>
                 <div className="flex gap-4">
                   <button 
-                    onClick={async () => {
-                      setMatchId(pendingInvitation.matchId);
-                      matchIdRef.current = pendingInvitation.matchId;
-                      setIsMultiplayer(true);
-                      setPendingInvitation(null);
-                      await updateDoc(doc(db, 'invitations', pendingInvitation.id), { status: 'accepted' });
-                    }}
+                    onClick={() => handleAcceptInvitation(pendingInvitation)}
                     className="flex-1 bg-[#4CAF50] text-white font-bold py-3 rounded-xl hover:bg-[#45A049]"
                   >
                     同意

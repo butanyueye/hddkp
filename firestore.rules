@@ -109,7 +109,8 @@ service cloud.firestore {
              player.uid is string && player.uid.size() > 0 && player.uid.size() <= 100 &&
              player.name is string && player.name.size() <= 100 &&
              player.score is number && player.score >= 0 &&
-             player.status in ['playing', 'dead'];
+             player.status in ['playing', 'dead'] &&
+             (!('character' in player) || player.character is string);
     }
 
     function isValidMatch(data) {
