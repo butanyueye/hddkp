@@ -384,7 +384,7 @@ function GameContent() {
     hzSkillCharges: 0,
     hzSkillActive: 0,
     hzSkillSprint: 0,
-    hzPassiveCharges: 3,
+    hzPassiveCharges: 1,
     hddSkillTimer: 420
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
@@ -1290,7 +1290,7 @@ function GameContent() {
       hzSkillCharges: 0,
       hzSkillActive: 0,
       hzSkillSprint: 0,
-      hzPassiveCharges: 3,
+      hzPassiveCharges: 1,
       hddSkillTimer: 420
     };
     
@@ -1509,8 +1509,8 @@ function GameContent() {
   }, [matchState, user, selectedCharacter, matchType]);
 
   const activateHzSkill = useCallback(() => {
-    if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 3) {
-      playerRef.current.hzSkillCharges -= 3;
+    if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 4) {
+      playerRef.current.hzSkillCharges -= 4;
       playerRef.current.hzSkillActive = 600; // 10 seconds duration for shield
       playSound('score');
     }
@@ -2028,7 +2028,7 @@ function GameContent() {
           pu.collected = true;
           
           // Huzi skill charge
-          if (selectedCharacter === 'hz' && player.hzSkillCharges < 3) {
+          if (selectedCharacter === 'hz' && player.hzSkillCharges < 4) {
             player.hzSkillCharges += 1;
           }
 
@@ -2869,16 +2869,16 @@ function GameContent() {
           <div className="absolute bottom-4 right-4 z-10">
             <button
               onClick={activateHzSkill}
-              disabled={playerRef.current && playerRef.current.hzSkillCharges < 3}
+              disabled={playerRef.current && playerRef.current.hzSkillCharges < 4}
               className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden ${
-                playerRef.current && playerRef.current.hzSkillCharges < 3
+                playerRef.current && playerRef.current.hzSkillCharges < 4
                   ? 'bg-black/50 border-white/20 opacity-60'
                   : 'bg-green-500 border-green-300 shadow-[0_6px_0_#2e7d32] active:translate-y-1 active:shadow-none'
               }`}
             >
               <img src={hzSkillImg} alt="Skill" className="w-full h-full object-cover" />
               <div className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
-                {playerRef.current ? playerRef.current.hzSkillCharges : 0}/3
+                {playerRef.current ? playerRef.current.hzSkillCharges : 0}/4
               </div>
             </button>
             <div className="text-center mt-1">
@@ -3110,7 +3110,7 @@ function GameContent() {
                       name: '呼子', 
                       img: hzImg, 
                       skill: '技能：脂肪护盾', 
-                      desc: '捡道具获得充能，充能3次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限3次。' 
+                      desc: '捡道具获得充能，充能4次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限1次。' 
                     }
                   ].map(char => {
                     const isUnlocked = unlockedCharacters.includes(char.id);
