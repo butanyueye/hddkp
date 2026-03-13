@@ -1783,7 +1783,8 @@ function GameContent() {
       player.height = 120;
     }
 
-    if (player.jumps < MAX_JUMPS) {
+    const maxJumpsAllowed = selectedCharacter === 'hgte' ? 1 : MAX_JUMPS;
+    if (player.jumps < maxJumpsAllowed) {
       playSound('jump');
       player.vy = JUMP_STRENGTH;
       player.jumps++;
@@ -2102,7 +2103,7 @@ function GameContent() {
           }
           
           // Hgte skill charge
-          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 10) {
+          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 6) {
             player.hgtePartialCharges += 1;
             if (player.hgtePartialCharges >= 2) {
               player.hgteSkillCharges += 1;
@@ -2168,7 +2169,7 @@ function GameContent() {
             return next;
           });
           
-          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 10) {
+          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 6) {
             player.hgtePartialCharges += 1;
             if (player.hgtePartialCharges >= 2) {
               player.hgteSkillCharges += 1;
@@ -3299,7 +3300,7 @@ function GameContent() {
                       name: '呼刚帝尔',
                       img: hgteImg,
                       skill: '技能：挥棒',
-                      desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物。初始3次充能，捡起2次掉落物可充能1次，最多充能10次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。'
+                      desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物，无法二段跳。初始3次充能，捡起2次掉落物可充能1次，最多充能6次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。'
                     }
                   ].map(char => {
                     const isUnlocked = unlockedCharacters.includes(char.id);
