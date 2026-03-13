@@ -365,7 +365,7 @@ export default function App() {
 function GameContent() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scoreAccumulatorRef = useRef(0);
-  const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'shop'>('start');
+  const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'shop' | 'gacha'>('start');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [diamonds, setDiamonds] = useState(200);
@@ -374,6 +374,12 @@ function GameContent() {
     magnet: 5,
     doubleScore: 5,
     dash: 5
+  });
+  const [gameInventory, setGameInventory] = useState<Record<PowerUpType, number>>({
+    shield: 0,
+    magnet: 0,
+    doubleScore: 0,
+    dash: 0
   });
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string}[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
@@ -492,13 +498,7 @@ function GameContent() {
             setHighScore(data.highScore || 0);
             setDiamonds(data.diamonds || 0);
             const loadedInventory = data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 };
-            const cappedInventory = {
-              shield: Math.min(loadedInventory.shield || 0, 5),
-              magnet: Math.min(loadedInventory.magnet || 0, 5),
-              doubleScore: Math.min(loadedInventory.doubleScore || 0, 5),
-              dash: Math.min(loadedInventory.dash || 0, 5),
-            };
-            setInventory(cappedInventory);
+            setInventory(loadedInventory);
             setAchievements(data.achievements || []);
             
             const loadedUnlocked = data.unlockedCharacters || ['hdd'];
@@ -1407,6 +1407,15 @@ function GameContent() {
     setScore(0);
     setReviveCount(0);
     scoreAccumulatorRef.current = 0;
+    
+    // Initialize game inventory with a cap of 5
+    setGameInventory({
+      shield: Math.min(inventory.shield || 0, 5),
+      magnet: Math.min(inventory.magnet || 0, 5),
+      doubleScore: Math.min(inventory.doubleScore || 0, 5),
+      dash: Math.min(inventory.dash || 0, 5),
+    });
+
     playerRef.current = { 
       x: 50, y: 400, width: 60, height: 120, vy: 0, 
       isJumping: false, jumps: 0, 
@@ -1436,7 +1445,7 @@ function GameContent() {
     frameCountRef.current = 0;
     speedRef.current = DIFFICULTY_SETTINGS[difficulty].speed;
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
-  }, [difficulty, selectedCharacter]);
+  }, [difficulty, selectedCharacter, inventory]);
 
   const matchDataRef = useRef<any>(null);
   const matchStateRef = useRef(matchState);
@@ -1833,7 +1842,10 @@ function GameContent() {
 
   const useItem = (type: PowerUpType) => {
     if (gameState !== 'playing') return;
-    if (inventory[type] > 0) {
+    if (gameInventory[type] > 0 && inventory[type] > 0) {
+      const newGameInventory = { ...gameInventory, [type]: gameInventory[type] - 1 };
+      setGameInventory(newGameInventory);
+      
       const newInventory = { ...inventory, [type]: inventory[type] - 1 };
       setInventory(newInventory);
       
@@ -1848,7 +1860,7 @@ function GameContent() {
       }
       createParticles(playerRef.current.x + playerRef.current.width / 2, playerRef.current.y + playerRef.current.height / 2, POWERUP_CONFIG[type].color, 20);
       playSound('score');
-
+      
       if (user) {
         setDoc(doc(db, 'users', user.uid), {
           inventory: newInventory
@@ -3096,16 +3108,16 @@ function GameContent() {
               <button
                 key={type}
                 onClick={() => useItem(type)}
-                disabled={inventory[type] <= 0}
+                disabled={gameInventory[type] <= 0}
                 className={`w-12 h-12 rounded-2xl border-2 flex flex-col items-center justify-center transition-all relative ${
-                  inventory[type] > 0 
+                  gameInventory[type] > 0 
                     ? 'bg-white border-yellow-400 shadow-lg scale-110' 
                     : 'bg-black/30 border-white/10 opacity-50 grayscale'
                 }`}
               >
                 <span className="text-xl">{POWERUP_CONFIG[type].icon}</span>
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
-                  {inventory[type]}
+                  {gameInventory[type]}
                 </span>
               </button>
             ))}
