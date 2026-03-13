@@ -7,6 +7,9 @@ import { hjdjBase64 as hjdjImg } from './hjdjBase64';
 import { hjdjSkillBase64 as hjdjSkillImg } from './hjdjSkillBase64';
 import { hzBase64 as hzImg } from './hzBase64';
 import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
+import { hgteBase64 as hgteImg } from './hgteBase64';
+import { hgteSkillBase64 as hgteSkillImg } from './hgteSkillBase64';
+import { hxdBase64 as hxdImg } from './hxdBase64';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -14,6 +17,7 @@ const getCharacterImage = (charId: string | undefined) => {
     case 'santa': return santaImg;
     case 'hjdj': return hjdjImg;
     case 'hz': return hzImg;
+    case 'hgte': return hgteImg;
     case 'hdd':
     default: return hddImg;
   }
@@ -79,6 +83,7 @@ const SHOP_ITEMS = {
 
 const CHARACTER_REQUIREMENTS: Record<string, number> = {
   hdd: 0,
+  hgte: 0,
   santa: 1000,
   hjdj: 2000,
   hz: 3000
@@ -123,7 +128,7 @@ const toggleMute = () => {
   return isMuted;
 };
 
-const playSound = (type: 'jump' | 'score' | 'gameover') => {
+const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit') => {
   if (!audioCtx) return;
   try {
     const osc = audioCtx.createOscillator();
@@ -156,6 +161,27 @@ const playSound = (type: 'jump' | 'score' | 'gameover') => {
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
       osc.start(now);
       osc.stop(now + 0.5);
+    } else if (type === 'hit') {
+      // Crisp "swish-bang" sound
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      
+      const noiseOsc = audioCtx.createOscillator();
+      const noiseGain = audioCtx.createGain();
+      noiseOsc.type = 'sawtooth';
+      noiseOsc.frequency.setValueAtTime(100, now);
+      noiseOsc.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+      noiseGain.gain.setValueAtTime(0.2, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      noiseOsc.start(now);
+      noiseOsc.stop(now + 0.15);
+
+      osc.start(now);
+      osc.stop(now + 0.1);
     }
   } catch (e) {
     console.error("Audio play failed", e);
@@ -185,6 +211,11 @@ interface Player {
   hzSkillSprint: number;
   hzPassiveCharges: number;
   hddSkillTimer: number;
+  hgteSkillCharges: number;
+  hgtePartialCharges: number;
+  hgteSkillActive: number;
+  hgtePassiveUsed: boolean;
+  hxdActive: boolean;
 }
 
 interface Obstacle {
@@ -346,7 +377,7 @@ function GameContent() {
   });
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string}[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
-  const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd']);
+  const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd', 'hgte']);
   const [avatarId, setAvatarId] = useState<string>('hdd');
   const [showAvatarSelect, setShowAvatarSelect] = useState(false);
   const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
@@ -354,10 +385,12 @@ function GameContent() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
+  const [hxdImage, setHxdImage] = useState<HTMLImageElement | null>(null);
+  const [hgteSkillImage, setHgteSkillImage] = useState<HTMLImageElement | null>(null);
   
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz'>('hdd');
+  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte'>('hdd');
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [checkInCount, setCheckInCount] = useState(0);
@@ -385,7 +418,12 @@ function GameContent() {
     hzSkillActive: 0,
     hzSkillSprint: 0,
     hzPassiveCharges: 1,
-    hddSkillTimer: 420
+    hddSkillTimer: 420,
+    hgteSkillCharges: 3,
+    hgtePartialCharges: 0,
+    hgteSkillActive: 0,
+    hgtePassiveUsed: false,
+    hxdActive: false
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
@@ -452,7 +490,13 @@ function GameContent() {
             setDiamonds(data.diamonds || 0);
             setInventory(data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 });
             setAchievements(data.achievements || []);
-            setUnlockedCharacters(data.unlockedCharacters || ['hdd']);
+            
+            const loadedUnlocked = data.unlockedCharacters || ['hdd'];
+            if (!loadedUnlocked.includes('hgte')) {
+              loadedUnlocked.push('hgte');
+            }
+            setUnlockedCharacters(loadedUnlocked);
+            
             setAvatarId(data.avatarId || 'hdd');
             setFriends(data.friends || []);
           } else {
@@ -466,7 +510,7 @@ function GameContent() {
               diamonds: 200,
               inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
               achievements: [],
-              unlockedCharacters: ['hdd'],
+              unlockedCharacters: ['hdd', 'hgte'],
               avatarId: 'hdd',
               friends: []
             };
@@ -1291,7 +1335,12 @@ function GameContent() {
       hzSkillActive: 0,
       hzSkillSprint: 0,
       hzPassiveCharges: 1,
-      hddSkillTimer: 420
+      hddSkillTimer: 420,
+      hgteSkillCharges: 3,
+      hgtePartialCharges: 0,
+      hgteSkillActive: 0,
+      hgtePassiveUsed: false,
+      hxdActive: false
     };
     
     obstaclesRef.current = [];
@@ -1507,6 +1556,25 @@ function GameContent() {
       clearInterval(pollInterval);
     };
   }, [matchState, user, selectedCharacter, matchType]);
+
+  const activateHgteSkill = useCallback(() => {
+    if (selectedCharacter === 'hgte' && playerRef.current && playerRef.current.hgteSkillCharges > 0) {
+      playerRef.current.hgteSkillCharges -= 1;
+      playerRef.current.hgteSkillActive = 30; // 0.5s duration for swing
+      playSound('hit');
+      // Screen shake effect
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.style.transform = 'translate(5px, 5px)';
+        setTimeout(() => {
+          if (canvas) canvas.style.transform = 'translate(-5px, -5px)';
+          setTimeout(() => {
+            if (canvas) canvas.style.transform = 'translate(0, 0)';
+          }, 50);
+        }, 50);
+      }
+    }
+  }, [selectedCharacter]);
 
   const activateHzSkill = useCallback(() => {
     if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 4) {
@@ -1813,6 +1881,7 @@ function GameContent() {
       if (player.invincibility > 0) player.invincibility -= dt;
       if (player.hjdjSkillActive > 0) player.hjdjSkillActive -= dt;
       if (player.hzSkillActive > 0) player.hzSkillActive -= dt;
+      if (player.hgteSkillActive > 0) player.hgteSkillActive -= dt;
       if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
       if (player.dash > 0) {
@@ -2003,11 +2072,11 @@ function GameContent() {
         pu.x -= currentSpeed * dt;
 
         // Magnet effect
-        if (player.magnet > 0) {
+        if (player.magnet > 0 || player.hxdActive) {
           const dx = player.x - pu.x;
           const dy = player.y - pu.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < 200) {
+          if (dist < 300) { // Slightly larger range for hxd
             pu.x += dx * 0.1 * dt;
             pu.y += dy * 0.1 * dt;
           }
@@ -2030,6 +2099,15 @@ function GameContent() {
           // Huzi skill charge
           if (selectedCharacter === 'hz' && player.hzSkillCharges < 4) {
             player.hzSkillCharges += 1;
+          }
+          
+          // Hgte skill charge
+          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 10) {
+            player.hgtePartialCharges += 1;
+            if (player.hgtePartialCharges >= 2) {
+              player.hgteSkillCharges += 1;
+              player.hgtePartialCharges = 0;
+            }
           }
 
           playSound('score');
@@ -2058,11 +2136,11 @@ function GameContent() {
         d.x -= currentSpeed * dt;
 
         // Magnet effect
-        if (player.magnet > 0) {
+        if (player.magnet > 0 || player.hxdActive) {
           const dx = player.x - d.x;
           const dy = player.y - d.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < 200) {
+          if (dist < 300) { // Slightly larger range for hxd
             d.x += dx * 0.15 * dt;
             d.y += dy * 0.15 * dt;
           }
@@ -2089,6 +2167,15 @@ function GameContent() {
             }
             return next;
           });
+          
+          if (selectedCharacter === 'hgte' && player.hgteSkillCharges < 10) {
+            player.hgtePartialCharges += 1;
+            if (player.hgtePartialCharges >= 2) {
+              player.hgteSkillCharges += 1;
+              player.hgtePartialCharges = 0;
+            }
+          }
+          
           createParticles(d.x, d.y, '#60a5fa', 15);
           diamondsRef.current.splice(i, 1);
           continue;
@@ -2112,6 +2199,13 @@ function GameContent() {
         // Hjdj skill destruction
         if (player.hjdjSkillActive > 0 && obs.x < player.x + 400) {
           createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ff4400', 20);
+          obstacles.splice(i, 1);
+          continue;
+        }
+
+        // Hgte skill destruction
+        if (player.hgteSkillActive > 0 && obs.x > player.x && obs.x < player.x + 200) {
+          createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#f97316', 30); // Orange-red fire particles
           obstacles.splice(i, 1);
           continue;
         }
@@ -2155,6 +2249,13 @@ function GameContent() {
             player.hzPassiveCharges -= 1;
             player.invincibility = 120; // 2 seconds invincibility after passive trigger
             createParticles(player.x + player.width/2, player.y + player.height/2, '#60a5fa', 30);
+            obstacles.splice(i, 1);
+            continue;
+          } else if (selectedCharacter === 'hgte' && !player.hgtePassiveUsed) {
+            player.hgtePassiveUsed = true;
+            player.hxdActive = true;
+            player.invincibility = 180; // 3 seconds invincibility
+            createParticles(player.x + player.width/2, player.y + player.height/2, '#fbbf24', 50);
             obstacles.splice(i, 1);
             continue;
           } else {
@@ -2380,6 +2481,16 @@ function GameContent() {
           ctx.globalAlpha = Math.floor(frameCountRef.current / 5) % 2 === 0 ? 0.3 : 0.8;
         }
         
+        if (selectedCharacter === 'hgte') {
+          const scale = 1.8;
+          const newDrawWidth = drawWidth * scale;
+          const newDrawHeight = drawHeight * scale;
+          offsetX -= (newDrawWidth - drawWidth) / 2;
+          offsetY -= (newDrawHeight - drawHeight);
+          drawWidth = newDrawWidth;
+          drawHeight = newDrawHeight;
+        }
+        
         ctx.drawImage(playerImage, player.x + offsetX, player.y + offsetY, drawWidth, drawHeight);
         ctx.restore();
       } else {
@@ -2401,6 +2512,40 @@ function GameContent() {
         ctx.globalAlpha = 1.0;
       }
       
+      // Draw hxd NPC
+      if (player.hxdActive && hxdImage) {
+        const hxdX = player.x - 50 + Math.sin(frameCountRef.current / 20) * 10;
+        const hxdY = player.y - 30 + Math.cos(frameCountRef.current / 15) * 10;
+        ctx.drawImage(hxdImage, hxdX, hxdY, 40, 40);
+      }
+
+      // Draw hgte swing effect
+      if (player.hgteSkillActive > 0) {
+        ctx.save();
+        ctx.translate(player.x + player.width, player.y + player.height / 2);
+        // Rotate based on remaining time (30 -> 0)
+        const angle = (player.hgteSkillActive / 30) * Math.PI - Math.PI / 2;
+        ctx.rotate(angle);
+        
+        // Draw fire trail
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(100, -20);
+        ctx.lineTo(120, 0);
+        ctx.lineTo(100, 20);
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.5)';
+        ctx.fill();
+
+        // Draw bat
+        if (hgteSkillImage) {
+          ctx.drawImage(hgteSkillImage, 0, -10, 80, 20);
+        } else {
+          ctx.fillStyle = '#8B4513';
+          ctx.fillRect(0, -5, 80, 10);
+        }
+        ctx.restore();
+      }
+
       // Score is now rendered via React overlay
     };
 
@@ -2411,7 +2556,7 @@ function GameContent() {
     }
 
     return () => cancelAnimationFrame(animationRef.current);
-  }, [gameState, playerImage, score, createParticles, updateLeaderboard, isMultiplayer, updateMatchScore, finishMatch]);
+  }, [gameState, playerImage, hxdImage, hgteSkillImage, score, createParticles, updateLeaderboard, isMultiplayer, updateMatchScore, finishMatch]);
 
   useEffect(() => {
     const img = new Image();
@@ -2419,6 +2564,14 @@ function GameContent() {
       setPlayerImage(img);
     };
     img.src = getCharacterImage(selectedCharacter);
+
+    const hxdImgObj = new Image();
+    hxdImgObj.onload = () => setHxdImage(hxdImgObj);
+    hxdImgObj.src = hxdImg;
+
+    const skillImgObj = new Image();
+    skillImgObj.onload = () => setHgteSkillImage(skillImgObj);
+    skillImgObj.src = hgteSkillImg;
   }, [selectedCharacter]);
 
   return (
@@ -2446,7 +2599,7 @@ function GameContent() {
                       <img src={getCharacterImage(charId)} alt={charId} className="h-full object-contain" />
                     </div>
                     <span className="text-sm font-black text-[#5d4037]">
-                      {charId === 'hdd' ? '呼大帝' : charId === 'santa' ? '圣诞老呼' : charId === 'hjdj' ? '海军大将' : '呼子'}
+                      {charId === 'hdd' ? '呼大帝' : charId === 'santa' ? '圣诞老呼' : charId === 'hjdj' ? '海军大将' : charId === 'hgte' ? '呼刚帝尔' : '呼子'}
                     </span>
                   </button>
                 ))}
@@ -2496,7 +2649,8 @@ function GameContent() {
                   恭喜获得：{
                     unlockingChar === 'santa' ? '圣诞老呼' : 
                     unlockingChar === 'hjdj' ? '海军大将' : 
-                    unlockingChar === 'hz' ? '呼子' : '新伙伴'
+                    unlockingChar === 'hz' ? '呼子' : 
+                    unlockingChar === 'hgte' ? '呼刚帝尔' : '新伙伴'
                   }
                 </motion.p>
                 <motion.button
@@ -2790,6 +2944,11 @@ function GameContent() {
                   PASSIVE: {playerRef.current.hzPassiveCharges}
                 </div>
               )}
+              {selectedCharacter === 'hgte' && playerRef.current && (
+                <div className="bg-purple-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white">
+                  PASSIVE: {playerRef.current.hgtePassiveUsed ? 0 : 1}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2883,6 +3042,29 @@ function GameContent() {
             </button>
             <div className="text-center mt-1">
               <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">脂肪护盾</span>
+            </div>
+          </div>
+        )}
+
+        {/* Hgte Skill Button */}
+        {gameState === 'playing' && selectedCharacter === 'hgte' && (
+          <div className="absolute bottom-4 right-4 z-10">
+            <button
+              onClick={activateHgteSkill}
+              disabled={playerRef.current && playerRef.current.hgteSkillCharges < 1}
+              className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden ${
+                playerRef.current && playerRef.current.hgteSkillCharges < 1
+                  ? 'bg-black/50 border-white/20 opacity-60'
+                  : 'bg-orange-500 border-orange-300 shadow-[0_6px_0_#c2410c] active:translate-y-1 active:shadow-none'
+              }`}
+            >
+              <img src={hgteSkillImg} alt="Skill" className="w-full h-full object-contain -rotate-45 scale-125 drop-shadow-md" />
+              <div className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
+                {playerRef.current ? playerRef.current.hgteSkillCharges : 0}
+              </div>
+            </button>
+            <div className="text-center mt-1">
+              <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">挥棒</span>
             </div>
           </div>
         )}
@@ -3111,6 +3293,13 @@ function GameContent() {
                       img: hzImg, 
                       skill: '技能：脂肪护盾', 
                       desc: '捡道具获得充能，充能4次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限1次。' 
+                    },
+                    {
+                      id: 'hgte',
+                      name: '呼刚帝尔',
+                      img: hgteImg,
+                      skill: '技能：挥棒',
+                      desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物。初始3次充能，捡起2次掉落物可充能1次，最多充能10次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。'
                     }
                   ].map(char => {
                     const isUnlocked = unlockedCharacters.includes(char.id);
