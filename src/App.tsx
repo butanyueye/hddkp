@@ -481,6 +481,17 @@ function GameContent() {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
         }
 
+        // Listen for invitations
+        const q = query(collection(db, 'invitations'), where('toUid', '==', u.uid), where('status', '==', 'pending'));
+        const unsubscribeInv = onSnapshot(q, (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data();
+              setPendingInvitation({ id: change.doc.id, ...data });
+            }
+          });
+        });
+        
         // Fetch check-in data
         try {
           const checkInDoc = await getDoc(doc(db, 'checkIn', u.uid));
@@ -666,7 +677,7 @@ function GameContent() {
         const usersList: any[] = [];
         querySnapshot.forEach((doc) => {
           if (doc.id !== user.uid) {
-            usersList.push({ uid: doc.id, ...doc.data() });
+            usersList.push({ uid: doc.id, name: doc.data().name, avatarId: doc.data().avatarId });
           }
         });
         setAllUsers(usersList);
@@ -677,6 +688,17 @@ function GameContent() {
     
     fetchUsers();
   }, [showFriendsModal, user]);
+
+  // Update friendsData when friends or allUsers changes
+  useEffect(() => {
+    if (allUsers.length > 0 && friends.length > 0) {
+      const data = allUsers.filter(u => friends.includes(u.uid));
+      setFriendsData(data);
+    } else {
+      setFriendsData([]);
+    }
+  }, [allUsers, friends]);
+
 
   // Listen for invitations
   useEffect(() => {
@@ -700,17 +722,54 @@ function GameContent() {
   }, [user]);
 
   const inviteFriend = async (friendUid: string) => {
-    if (!matchId) {
-      alert("请先创建房间！");
-      return;
+    if (!user) return;
+    
+    // 1. Create a private room first if not already in one
+    let roomId = matchId;
+    if (!roomId) {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setRoomCodeInput(code);
+      setIsHost(true);
+      setMatchType('private');
+      setMatchState('matching');
+      matchStateRef.current = 'matching';
+      setMatchmakingStatus('等待好友加入...');
+      setIsMultiplayer(true);
+      
+      // Create the match
+      const newMatchRef = doc(collection(db, 'matches'));
+      await setDoc(newMatchRef, {
+        status: 'waiting',
+        createdAt: serverTimestamp(),
+        roomType: 'private',
+        roomId: code,
+        player1: {
+          uid: user.uid,
+          name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
+          score: 0,
+          status: 'playing',
+          character: selectedCharacter
+        }
+      });
+      roomId = newMatchRef.id;
+      setMatchId(roomId);
+      matchIdRef.current = roomId;
     }
+
+    // 2. Send invitation to friend (via a new 'invitations' collection)
     try {
-      await setDoc(doc(db, 'matches', matchId), {
-        invitedFriendUid: friendUid
-      }, { merge: true });
+      await addDoc(collection(db, 'invitations'), {
+        fromUid: user.uid,
+        fromName: user.displayName || '匿名玩家',
+        toUid: friendUid,
+        matchId: roomId,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
       alert("邀请已发送！");
     } catch (error) {
       console.error("Error inviting friend:", error);
+      alert("邀请发送失败");
     }
   };
 
@@ -3474,6 +3533,39 @@ function GameContent() {
                     className="ml-2 text-blue-600 hover:text-blue-800 underline"
                   >
                     {authMode === 'login' ? '立即注册' : '返回登录'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Invitation Modal */}
+          {pendingInvitation && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white p-6 rounded-2xl border-4 border-[#FAD689] shadow-xl w-full max-w-sm">
+                <h3 className="text-xl font-bold text-[#A65D2C] mb-4">好友邀请</h3>
+                <p className="text-[#A65D2C] mb-6">{pendingInvitation.fromName} 邀请你加入房间！</p>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={async () => {
+                      setMatchId(pendingInvitation.matchId);
+                      matchIdRef.current = pendingInvitation.matchId;
+                      setIsMultiplayer(true);
+                      setPendingInvitation(null);
+                      await updateDoc(doc(db, 'invitations', pendingInvitation.id), { status: 'accepted' });
+                    }}
+                    className="flex-1 bg-[#4CAF50] text-white font-bold py-3 rounded-xl hover:bg-[#45A049]"
+                  >
+                    同意
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      setPendingInvitation(null);
+                      await updateDoc(doc(db, 'invitations', pendingInvitation.id), { status: 'rejected' });
+                    }}
+                    className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600"
+                  >
+                    拒绝
                   </button>
                 </div>
               </div>
