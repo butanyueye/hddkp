@@ -1562,8 +1562,9 @@ function GameContent() {
   const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
     setDifficulty(newDifficulty);
     const timeFactor = Math.floor(frameCountRef.current / 600);
-    speedRef.current = DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.5;
-    spawnRateRef.current = Math.max(40, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 5);
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 6;
+    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.3);
+    spawnRateRef.current = Math.max(50, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 3);
   }, []);
 
   const resumeGame = useCallback(() => {
@@ -1601,9 +1602,6 @@ function GameContent() {
       playerRef.current.vy = 0;
       playerRef.current.isJumping = false;
       playerRef.current.jumps = 0;
-      
-      // Reset speed
-      speedRef.current = DIFFICULTY_SETTINGS[difficulty].speed;
       
       // Clear obstacles near player
       obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 300);
@@ -1924,8 +1922,11 @@ function GameContent() {
       const currentSpeed = speedRef.current * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
 
       if (Math.floor(frameCountRef.current / 600) > Math.floor(prevFrameCount / 600)) {
-        speedRef.current += 0.5;
-        spawnRateRef.current = Math.max(40, spawnRateRef.current - 5);
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 6;
+        if (speedRef.current < maxSpeed) {
+          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.3);
+        }
+        spawnRateRef.current = Math.max(50, spawnRateRef.current - 3);
       }
 
       // Spawn Obstacles
@@ -2600,9 +2601,9 @@ function GameContent() {
                 </button>
               </div>
               
-              <div className="p-6 flex flex-col gap-6 overflow-y-auto bg-gradient-to-b from-purple-50/50 to-white">
+              <div className="p-6 flex flex-col gap-6 overflow-y-auto bg-gradient-to-b from-[#FFFDF0] to-[#FFF0D4]">
                 {/* Room Section */}
-                <div className="bg-white p-5 rounded-2xl border-2 border-[#FAD689] shadow-inner">
+                <div className="bg-white p-5 rounded-2xl border-2 border-[#FAD689] shadow-sm">
                   <h3 className="font-bold text-[#A65D2C] mb-4 flex items-center gap-2 text-lg">
                     <Play size={20} className="text-[#4CAF50]" /> 自定义房间
                   </h3>
@@ -2652,22 +2653,22 @@ function GameContent() {
                                 <Users size={20} className="text-[#4CAF50]" />
                               )}
                             </div>
-                            <span className="font-semibold text-[#A65D2C]">{friend.name}</span>
+                            <span className="font-bold text-[#A65D2C]">{friend.name}</span>
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-2">
                             <button 
                               onClick={() => inviteFriend(friend.uid)}
-                              className="text-[#4CAF50] hover:bg-[#E8F5E9] p-2 rounded-lg transition-all"
+                              className="flex items-center justify-center bg-[#4CAF50] text-white p-2 rounded-xl hover:bg-[#45A049] active:scale-95 transition-all shadow-sm"
                               title="邀请加入房间"
                             >
-                              <Play size={18} />
+                              <Play size={16} fill="currentColor" />
                             </button>
                             <button 
                               onClick={() => removeFriend(friend.uid)}
-                              className="text-[#A65D2C]/50 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all"
+                              className="flex items-center justify-center bg-red-100 text-red-500 p-2 rounded-xl hover:bg-red-500 hover:text-white active:scale-95 transition-all shadow-sm"
                               title="删除好友"
                             >
-                              <X size={18} />
+                              <X size={16} strokeWidth={3} />
                             </button>
                           </div>
                         </div>
@@ -2678,30 +2679,30 @@ function GameContent() {
 
                 {/* All Users List */}
                 <div>
-                  <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                    <Users size={18} /> 所有玩家
+                  <h3 className="font-bold text-[#A65D2C] mb-3 flex items-center gap-2 text-lg">
+                    <Users size={20} className="text-[#FAD689]" /> 所有玩家
                   </h3>
-                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                     {allUsers.filter(u => u.uid !== user?.uid).map(u => {
                       const isFriend = friends.includes(u.uid);
                       return (
-                        <div key={u.uid} className="flex items-center justify-between bg-gray-50 border border-gray-200 p-2 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-white rounded-full overflow-hidden flex items-center justify-center border border-gray-200">
+                        <div key={u.uid} className="flex items-center justify-between bg-white border-2 border-[#FAD689]/50 p-3 rounded-2xl hover:border-[#FAD689] transition-all shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-[#FFFDF0] rounded-full overflow-hidden flex items-center justify-center border-2 border-[#FAD689]">
                               {u.avatarId ? (
                                 <img src={getCharacterImage(u.avatarId)} alt="avatar" className="w-full h-full object-contain" />
                               ) : (
-                                <Users size={16} className="text-gray-400" />
+                                <Users size={20} className="text-[#FAD689]" />
                               )}
                             </div>
-                            <span className="font-bold text-gray-700 text-sm truncate max-w-[100px]">{u.name}</span>
+                            <span className="font-bold text-[#A65D2C] text-sm truncate max-w-[120px]">{u.name}</span>
                           </div>
                           {isFriend ? (
-                            <span className="text-gray-400 text-xs font-bold px-2 py-1 bg-gray-200 rounded-lg">已添加</span>
+                            <span className="text-[#A65D2C]/60 text-xs font-bold px-3 py-1.5 bg-[#FFFDF0] border-2 border-[#FAD689]/50 rounded-xl">已添加</span>
                           ) : (
                             <button 
                               onClick={() => addFriend(u.uid)}
-                              className="text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 border border-blue-200"
+                              className="text-white text-xs font-bold px-4 py-1.5 bg-[#4CAF50] rounded-xl hover:bg-[#45A049] shadow-sm active:scale-95 transition-all"
                             >
                               添加
                             </button>

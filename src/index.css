@@ -26,3 +26,22 @@
   --animate-slideInLeft: slideInLeft 0.5s ease-out;
   --animate-slideInRight: slideInRight 0.5s ease-out;
 }
+
+/* Custom Scrollbar for Modals */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #FFFDF0;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #FAD689;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #F9C75C;
+}
