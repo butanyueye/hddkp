@@ -43,6 +43,8 @@ import {
   getDocs,
   where,
   deleteDoc,
+  updateDoc,
+  addDoc,
   arrayUnion,
   arrayRemove
 } from 'firebase/firestore';

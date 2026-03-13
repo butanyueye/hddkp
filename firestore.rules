@@ -123,6 +123,17 @@ service cloud.firestore {
              (!('roomId' in data) || data.roomId is string);
     }
 
+    function isValidInvitation(data) {
+      return hasRequiredFields(['fromUid', 'fromName', 'toUid', 'matchId', 'status', 'createdAt']) &&
+             hasOnlyAllowedFields(['fromUid', 'fromName', 'toUid', 'matchId', 'status', 'createdAt']) &&
+             data.fromUid is string && data.fromUid.size() > 0 &&
+             data.fromName is string && data.fromName.size() > 0 &&
+             data.toUid is string && data.toUid.size() > 0 &&
+             data.matchId is string && data.matchId.size() > 0 &&
+             data.status in ['pending', 'accepted', 'rejected'] &&
+             data.createdAt is timestamp;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -161,6 +172,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidMatch(request.resource.data) && request.resource.data.player1.uid == request.auth.uid;
       allow update: if isAuthenticated() && isValidMatch(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.player1.uid == request.auth.uid;
+    }
+
+    match /invitations/{invitationId} {
+      allow read: if isAuthenticated() && (resource.data.toUid == request.auth.uid || resource.data.fromUid == request.auth.uid);
+      allow create: if isAuthenticated() && isValidInvitation(request.resource.data) && request.resource.data.fromUid == request.auth.uid;
+      allow update: if isAuthenticated() && isValidInvitation(request.resource.data) && (resource.data.toUid == request.auth.uid || resource.data.fromUid == request.auth.uid);
+      allow delete: if isAuthenticated() && (resource.data.toUid == request.auth.uid || resource.data.fromUid == request.auth.uid);
     }
 
     // Default deny

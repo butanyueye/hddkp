@@ -79,6 +79,20 @@
         "winner": { "type": "string" }
       },
       "required": ["status", "createdAt", "player1"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "A game invitation from one user to another",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string" },
+        "fromName": { "type": "string" },
+        "toUid": { "type": "string" },
+        "matchId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "fromName", "toUid", "matchId", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -97,6 +111,10 @@
     "/matches/{matchId}": {
       "schema": "Match",
       "description": "Multiplayer match data"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Game invitations"
     }
   }
 }
