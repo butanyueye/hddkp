@@ -10,7 +10,7 @@ import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
 import { hgteBase64 as hgteImg } from './hgteBase64';
 import { hgteSkillBase64 as hgteSkillImg } from './hgteSkillBase64';
 import { hxdBase64 as hxdImg } from './hxdBase64';
-import ndImg from './nd.png';
+import { ndBase64 as ndImg } from './ndBase64';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -153,7 +153,7 @@ const toggleMute = () => {
   return isMuted;
 };
 
-const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord') => {
+const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord' | 'powerup') => {
   if (!audioCtx) return;
   try {
     const osc = audioCtx.createOscillator();
@@ -223,6 +223,14 @@ const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord') =>
       
       osc.start(now);
       osc.stop(time);
+    } else if (type === 'powerup') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+      gainNode.gain.setValueAtTime(0.1, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      osc.start(now);
+      osc.stop(now + 0.2);
     }
   } catch (e) {
     console.error("Audio play failed", e);
@@ -1383,7 +1391,7 @@ function GameContent() {
     }
   };
 
-  const updateMatchScore = useCallback(async (currentScore: number) => {
+  const updateMatchScore = useCallback(async (currentScore: number, status?: string) => {
     if (!isMultiplayer || !matchId || !user || !matchDataRef.current) return;
     try {
       const matchRef = doc(db, 'matches', matchId);
@@ -1391,14 +1399,17 @@ function GameContent() {
       const isPlayer1 = data.player1.uid === user.uid;
       const playerKey = isPlayer1 ? 'player1' : 'player2';
       
+      const updateData: any = { ...data[playerKey], score: currentScore };
+      if (status) updateData.status = status;
+
       // Update locally first to avoid waiting for snapshot
       matchDataRef.current = {
         ...data,
-        [playerKey]: { ...data[playerKey], score: currentScore }
+        [playerKey]: updateData
       };
 
       await setDoc(matchRef, {
-        [playerKey]: { ...data[playerKey], score: currentScore }
+        [playerKey]: updateData
       }, { merge: true });
     } catch (e) {
       console.error("Score sync error:", e);
