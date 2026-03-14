@@ -152,7 +152,7 @@ const toggleMute = () => {
   return isMuted;
 };
 
-const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit') => {
+const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord') => {
   if (!audioCtx) return;
   try {
     const osc = audioCtx.createOscillator();
@@ -206,6 +206,22 @@ const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit') => {
 
       osc.start(now);
       osc.stop(now + 0.1);
+    } else if (type === 'newRecord') {
+      // Fanfare arpeggio
+      osc.type = 'square';
+      const notes = [440, 554.37, 659.25, 880]; // A4, C#5, E5, A5
+      let time = now;
+      gainNode.gain.setValueAtTime(0, time);
+      
+      notes.forEach((freq, i) => {
+        osc.frequency.setValueAtTime(freq, time);
+        gainNode.gain.linearRampToValueAtTime(0.2, time + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, time + 0.15);
+        time += 0.15;
+      });
+      
+      osc.start(now);
+      osc.stop(time);
     }
   } catch (e) {
     console.error("Audio play failed", e);
@@ -445,9 +461,11 @@ function GameContent() {
     weather: 'CLEAR' as WeatherType,
     weatherTimer: 0,
     weatherParticles: [] as {x: number, y: number, vx: number, vy: number, size: number, type: string, life: number}[],
+    speedLines: [] as {x: number, y: number, length: number, speed: number, alpha: number}[],
     biomeTransition: 0,
     announcement: '',
-    announcementTimer: 0
+    announcementTimer: 0,
+    hasAnnouncedNewRecord: false
   });
 
   const playerRef = useRef<Player>({ 
@@ -1455,9 +1473,11 @@ function GameContent() {
       weather: 'CLEAR',
       weatherTimer: 0,
       weatherParticles: [],
+      speedLines: [],
       biomeTransition: 0,
       announcement: '🌲 绿野森林',
-      announcementTimer: 120
+      announcementTimer: 120,
+      hasAnnouncedNewRecord: false
     };
     
     // Initialize game inventory with a cap of 5
@@ -2085,6 +2105,24 @@ function GameContent() {
           scoreAccumulatorRef.current -= integerIncrement;
           const newScore = s + integerIncrement;
           checkAchievements(newScore);
+          
+          // New Record Check
+          if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
+            envRef.current.hasAnnouncedNewRecord = true;
+            envRef.current.announcement = '🎉 新纪录! 🎉';
+            envRef.current.announcementTimer = 180;
+            playSound('newRecord');
+            // Fireworks
+            for(let i=0; i<50; i++) {
+              createParticles(
+                canvas.width/2 + (Math.random()-0.5)*300, 
+                canvas.height/2 + (Math.random()-0.5)*300, 
+                ['#fbbf24', '#f87171', '#60a5fa', '#34d399'][Math.floor(Math.random()*4)], 
+                Math.random()*5 + 2
+              );
+            }
+          }
+          
           return newScore;
         }
         return s;
@@ -2219,12 +2257,46 @@ function GameContent() {
         }
       }
 
+      // Speed Lines Update
+      const weatherSpeedMod = envRef.current.weather === 'WIND_FORWARD' ? 1.3 : envRef.current.weather === 'WIND_BACKWARD' ? 0.7 : 1;
+      const currentSpeed = speedRef.current * currentBiome.speedMod * weatherSpeedMod * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
+      
+      const isHighSpeed = currentSpeed > 8 || player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0;
+      if (isHighSpeed) {
+        // Spawn more lines based on speed
+        const spawnCount = Math.floor((currentSpeed - 5) / 2);
+        for(let i=0; i<spawnCount; i++) {
+          if (Math.random() < 0.3) {
+            envRef.current.speedLines.push({
+              x: canvas.width + Math.random() * 200,
+              y: Math.random() * canvas.height,
+              length: 50 + Math.random() * 150,
+              speed: currentSpeed * 2 + Math.random() * 10,
+              alpha: 0.1 + Math.random() * 0.3
+            });
+          }
+        }
+      }
+      
+      for (let i = envRef.current.speedLines.length - 1; i >= 0; i--) {
+        const line = envRef.current.speedLines[i];
+        line.x -= line.speed * dt;
+        if (line.x + line.length < 0) {
+          envRef.current.speedLines.splice(i, 1);
+        }
+      }
+
       // Obstacles & Power-ups Spawning
       const prevFrameCount = frameCountRef.current;
       frameCountRef.current += dt;
       
-      const weatherSpeedMod = envRef.current.weather === 'WIND_FORWARD' ? 1.3 : envRef.current.weather === 'WIND_BACKWARD' ? 0.7 : 1;
-      const currentSpeed = speedRef.current * currentBiome.speedMod * weatherSpeedMod * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
+      // Dynamic BGM Intensity
+      if (bgmAudio) {
+        // Base speed is ~5, max speed is ~13. Map this to playbackRate 1.0 -> 1.5
+        const targetRate = 1.0 + (envRef.current.biomeIndex * 0.05) + Math.max(0, (currentSpeed - 5) / 20);
+        // Smoothly transition playback rate
+        bgmAudio.playbackRate += (targetRate - bgmAudio.playbackRate) * 0.05;
+      }
 
       if (Math.floor(frameCountRef.current / 600) > Math.floor(prevFrameCount / 600)) {
         const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 6;
@@ -2466,6 +2538,22 @@ function GameContent() {
             setScore(s => {
               const newScore = s + 5;
               checkAchievements(newScore);
+              
+              if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
+                envRef.current.hasAnnouncedNewRecord = true;
+                envRef.current.announcement = '🎉 新纪录! 🎉';
+                envRef.current.announcementTimer = 180;
+                playSound('newRecord');
+                for(let j=0; j<50; j++) {
+                  createParticles(
+                    canvas.width/2 + (Math.random()-0.5)*300, 
+                    canvas.height/2 + (Math.random()-0.5)*300, 
+                    ['#fbbf24', '#f87171', '#60a5fa', '#34d399'][Math.floor(Math.random()*4)], 
+                    Math.random()*5 + 2
+                  );
+                }
+              }
+              
               return newScore;
             });
             continue;
@@ -2520,6 +2608,22 @@ function GameContent() {
           setScore(s => {
             const newScore = s + (player.doubleScore > 0 ? 2 : 1);
             checkAchievements(newScore);
+            
+            if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
+              envRef.current.hasAnnouncedNewRecord = true;
+              envRef.current.announcement = '🎉 新纪录! 🎉';
+              envRef.current.announcementTimer = 180;
+              playSound('newRecord');
+              for(let j=0; j<50; j++) {
+                createParticles(
+                  canvas.width/2 + (Math.random()-0.5)*300, 
+                  canvas.height/2 + (Math.random()-0.5)*300, 
+                  ['#fbbf24', '#f87171', '#60a5fa', '#34d399'][Math.floor(Math.random()*4)], 
+                  Math.random()*5 + 2
+                );
+              }
+            }
+            
             return newScore;
           });
         }
@@ -2629,6 +2733,21 @@ function GameContent() {
         ctx.fill();
       });
       ctx.globalAlpha = 1.0;
+
+      // Speed Lines
+      if (envRef.current.speedLines.length > 0) {
+        ctx.save();
+        envRef.current.speedLines.forEach(line => {
+          ctx.globalAlpha = line.alpha;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(line.x, line.y);
+          ctx.lineTo(line.x + line.length, line.y);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
 
       // Power-ups
       powerUpsRef.current.forEach(pu => {
