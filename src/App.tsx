@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
@@ -400,6 +400,7 @@ function GameContent() {
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showGachaResultModal, setShowGachaResultModal] = useState(false);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [gachaResult, setGachaResult] = useState<{fragments: number, items: Record<string, number>}>({fragments: 0, items: {}});
   const [checkInCount, setCheckInCount] = useState(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
@@ -486,65 +487,68 @@ function GameContent() {
 
   // --- Firebase Auth & Sync ---
   useEffect(() => {
+    let unsubscribeUser: (() => void) | null = null;
+    
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       setIsAuthReady(true);
+      
+      if (unsubscribeUser) {
+        unsubscribeUser();
+        unsubscribeUser = null;
+      }
+      
       if (u) {
         // Fetch user stats
         try {
-          const userDoc = await getDoc(doc(db, 'users', u.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setHighScore(data.highScore || 0);
-            setDiamonds(data.diamonds || 0);
-            const loadedInventory = data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 };
-            setInventory(loadedInventory);
-            setAchievements(data.achievements || []);
-            
-            const loadedUnlocked = data.unlockedCharacters || ['hdd'];
-            const hgteFragments = data.hgteFragments || 0;
-            
-            // Strictly enforce: only unlock hgte if fragments >= 78
-            let finalUnlocked = loadedUnlocked.filter(id => id !== 'hgte');
-            if (hgteFragments >= 78) {
-              finalUnlocked.push('hgte');
+          unsubscribeUser = onSnapshot(doc(db, 'users', u.uid), async (userDoc) => {
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              setHighScore(data.highScore || 0);
+              setDiamonds(data.diamonds || 0);
+              const loadedInventory = data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 };
+              setInventory(loadedInventory);
+              setAchievements(data.achievements || []);
+              
+              const loadedUnlocked = data.unlockedCharacters || ['hdd'];
+              const hgteFragments = data.hgteFragments || 0;
+              
+              // Strictly enforce: only unlock hgte if fragments >= 78
+              let finalUnlocked = loadedUnlocked.filter(id => id !== 'hgte');
+              if (hgteFragments >= 78) {
+                finalUnlocked.push('hgte');
+              }
+              setUnlockedCharacters(finalUnlocked);
+              
+              // Persist changes if they differ from database
+              if (JSON.stringify(finalUnlocked) !== JSON.stringify(loadedUnlocked)) {
+                await updateDoc(doc(db, 'users', u.uid), { unlockedCharacters: finalUnlocked });
+              }
+              
+              setAvatarId(data.avatarId || 'hdd');
+              setFriends(data.friends || []);
+              setHgteFragments(hgteFragments);
+            } else {
+              // Initialize user doc
+              const initialData = {
+                userId: u.uid,
+                name: u.displayName || '匿名玩家',
+                email: u.email || '',
+                highScore: 0,
+                totalGames: 0,
+                diamonds: 200,
+                inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
+                achievements: [],
+                unlockedCharacters: ['hdd'],
+                hgteFragments: 0,
+                avatarId: 'hdd',
+                friends: []
+              };
+              await setDoc(doc(db, 'users', u.uid), initialData);
             }
-            setUnlockedCharacters(finalUnlocked);
-            
-            // Persist changes if they differ from database
-            if (JSON.stringify(finalUnlocked) !== JSON.stringify(loadedUnlocked)) {
-              await updateDoc(doc(db, 'users', u.uid), { unlockedCharacters: finalUnlocked });
-            }
-            
-            setAvatarId(data.avatarId || 'hdd');
-            setFriends(data.friends || []);
-            setHgteFragments(hgteFragments);
-          } else {
-            // Initialize user doc
-            const initialData = {
-              userId: u.uid,
-              name: u.displayName || '匿名玩家',
-              email: u.email || '',
-              highScore: 0,
-              totalGames: 0,
-              diamonds: 200,
-              inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
-              achievements: [],
-              unlockedCharacters: ['hdd'],
-              hgteFragments: 0,
-              avatarId: 'hdd',
-              friends: []
-            };
-            await setDoc(doc(db, 'users', u.uid), initialData);
-            setHighScore(0);
-            setDiamonds(200);
-            setInventory(initialData.inventory);
-            setAchievements([]);
-            setUnlockedCharacters(['hdd']);
-            setHgteFragments(0);
-            setAvatarId('hdd');
-            setFriends([]);
-          }
+          }, (error) => {
+            handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
+          });
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${u.uid}`);
         }
@@ -602,7 +606,10 @@ function GameContent() {
     };
     testConnection();
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   // Invitation Listener
@@ -2805,7 +2812,11 @@ function GameContent() {
                 <h2 className="text-3xl font-black text-[#e65100]">抽奖结果</h2>
                 <button onClick={() => setShowGachaResultModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
               </div>
-              <div className="text-xl font-bold text-[#5d4037] mb-4">获得碎片：<span className="text-blue-600 font-black text-2xl">{gachaResult.fragments}</span></div>
+              <div className="flex items-center gap-2 text-xl font-bold text-[#5d4037] mb-4">
+                获得碎片：
+                <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                <span className="text-blue-600 font-black text-2xl">x{gachaResult.fragments}</span>
+              </div>
               <div className="w-full text-center">
                 <p className="text-[#d84315] font-bold text-sm mb-2">获得道具：</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -2816,6 +2827,41 @@ function GameContent() {
                     </div>
                   ))}
                   {Object.keys(gachaResult.items).length === 0 && <p className="text-gray-500 text-sm">无</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Inventory Modal */}
+        {showInventoryModal && (
+          <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center -mt-10">
+              <div className="w-full flex justify-between items-center mb-4">
+                <h2 className="text-3xl font-black text-[#e65100]">我的背包</h2>
+                <button onClick={() => setShowInventoryModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
+              </div>
+              
+              <div className="w-full bg-[#ffcc80]/30 py-3 px-4 rounded-xl border-2 border-[#ffb300]/30 mb-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                  <span className="text-[#d84315] font-bold">呼刚帝尔碎片</span>
+                </div>
+                <span className="text-blue-600 font-black text-xl">{hgteFragments}</span>
+              </div>
+
+              <div className="w-full">
+                <h3 className="text-[#d84315] font-bold text-lg mb-2">游戏道具</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {(Object.keys(POWERUP_CONFIG) as PowerUpType[]).map(type => (
+                    <div key={type} className="bg-white p-3 rounded-xl border-2 border-[#ffe082] flex flex-col items-center justify-center gap-1 shadow-sm">
+                      <span className="text-3xl drop-shadow-sm">{POWERUP_CONFIG[type].icon}</span>
+                      <span className="font-bold text-[#5d4037] text-sm">{POWERUP_CONFIG[type].label}</span>
+                      <div className="bg-[#ffecb3] px-3 py-1 rounded-full mt-1">
+                        <span className="font-black text-[#e65100]">x{inventory[type] || 0}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -3323,6 +3369,15 @@ function GameContent() {
                     </button>
                     <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>限定池</span>
                   </div>
+                  <div className="flex flex-col items-center">
+                    <button 
+                      onClick={() => setShowInventoryModal(true)}
+                      className="w-14 h-14 bg-purple-500 rounded-2xl flex items-center justify-center border-4 border-purple-200 shadow-lg transform -rotate-3"
+                    >
+                      <Briefcase className="text-white" size={28} />
+                    </button>
+                    <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>背包</span>
+                  </div>
                 </div>
 
                 {/* Character */}
@@ -3465,7 +3520,7 @@ function GameContent() {
                         {!isUnlocked && (
                           <div className="absolute inset-0 z-20 bg-black/10 flex flex-col items-center justify-center rounded-xl backdrop-blur-[1px]">
                             <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
-                              <Lock size={10} /> {isHgte ? `碎片 ${hgteFragments}/78` : `需达到 ${reqScore} 分`}
+                              <Lock size={10} /> {isHgte ? <span className="flex items-center gap-1"><img src={hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> {hgteFragments}/78</span> : `需达到 ${reqScore} 分`}
                             </div>
                             {canUnlock && !isHgte && (
                               <button 
@@ -3989,9 +4044,20 @@ function GameContent() {
                 <div className="bg-white p-4 rounded-2xl mb-4 border-2 border-[#ffe082]">
                   <h3 className="font-bold text-[#5d4037] mb-2">奖池预览</h3>
                   <div className="grid grid-cols-5 gap-2 text-center text-[10px]">
-                    {['护盾', '磁铁', '双倍积分', '冲刺', '碎片'].map((item, i) => (
-                      <div key={i} className="bg-gray-100 p-2 rounded-lg font-bold text-[#795548]">
-                        {item}<br/>20%
+                    {[
+                      { name: '护盾', icon: POWERUP_CONFIG['shield'].icon },
+                      { name: '磁铁', icon: POWERUP_CONFIG['magnet'].icon },
+                      { name: '双倍积分', icon: POWERUP_CONFIG['doubleScore'].icon },
+                      { name: '冲刺', icon: POWERUP_CONFIG['dash'].icon },
+                      { name: '碎片', img: hgteImg }
+                    ].map((item, i) => (
+                      <div key={i} className="bg-gray-100 p-2 rounded-lg font-bold text-[#795548] flex flex-col items-center justify-center">
+                        {item.img ? (
+                          <img src={item.img} alt={item.name} className="w-6 h-6 object-contain mb-1 drop-shadow-sm" />
+                        ) : (
+                          <span className="text-xl mb-1">{item.icon}</span>
+                        )}
+                        {item.name}<br/>20%
                       </div>
                     ))}
                   </div>
