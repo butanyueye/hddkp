@@ -2156,7 +2156,7 @@ function GameContent() {
 
       // Continuous scoring
       setScore(s => {
-        const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+        const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
         const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
@@ -2810,7 +2810,7 @@ function GameContent() {
             createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ef4444', 20);
             obstacles.splice(i, 1);
             setScore(s => {
-              const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+              const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
               const newScore = s + 5 * dashMultiplier;
               checkAchievements(newScore);
               
@@ -2881,7 +2881,7 @@ function GameContent() {
           obs.passed = true;
           playSound('score');
           setScore(s => {
-            const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+            const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
             const newScore = s + (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
             checkAchievements(newScore);
             
@@ -4088,7 +4088,7 @@ function GameContent() {
                       name: '圣诞老呼', 
                       img: santaImg, 
                       skill: '技能：圣诞麋鹿的眷顾', 
-                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺15秒，并在冲刺结束后获得永久护盾。冲刺时间增长5秒。冲刺期间获得5倍得分！' 
+                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺15秒，并在冲刺结束后获得永久护盾。冲刺时间增长5秒。冲刺期间获得3倍得分！' 
                     },
                     { 
                       id: 'hjdj', 
