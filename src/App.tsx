@@ -62,7 +62,7 @@ type Difficulty = 'easy' | 'normal' | 'hard';
 type ObstacleType = 'normal' | 'tall' | 'wide' | 'flying' | 'sliding';
 type PowerUpType = 'shield' | 'magnet' | 'doubleScore' | 'dash';
 
-type BiomeType = 'FOREST' | 'DESERT' | 'ICE' | 'CYBER' | 'SPACE';
+type BiomeType = 'FOREST' | 'DESERT' | 'ICE' | 'CYBER' | 'SPACE' | 'VOLCANO' | 'UNDERWATER' | 'VOID' | 'JUNGLE' | 'DESERT_STORM' | 'NEON_DREAM';
 type WeatherType = 'CLEAR' | 'RAIN' | 'WIND_FORWARD' | 'WIND_BACKWARD' | 'SNOW';
 
 interface Biome {
@@ -84,6 +84,12 @@ const BIOMES: Biome[] = [
   { id: 'ICE', name: '❄️ 极寒冰原', bgTop: '#a1c4fd', bgBottom: '#c2e9fb', ground: '#e0f7fa', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1.5, scoreThreshold: 2000 },
   { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.1, jumpMod: 1.1, speedMod: 1.1, slideMod: 1, scoreThreshold: 3500 },
   { id: 'SPACE', name: '🌌 浩瀚星空', bgTop: '#000000', bgBottom: '#1a0b2e', ground: '#424242', gravityMod: 0.6, jumpMod: 1.2, speedMod: 0.9, slideMod: 1, scoreThreshold: 5000 },
+  { id: 'VOLCANO', name: '🌋 熔岩火山', bgTop: '#430000', bgBottom: '#8b0000', ground: '#d84315', gravityMod: 1.2, jumpMod: 0.9, speedMod: 1.2, slideMod: 1, scoreThreshold: 7000 },
+  { id: 'UNDERWATER', name: '🌊 深海遗迹', bgTop: '#001f3f', bgBottom: '#0074D9', ground: '#001f3f', gravityMod: 0.8, jumpMod: 1.0, speedMod: 0.8, slideMod: 1.2, scoreThreshold: 9000 },
+  { id: 'VOID', name: '🌀 虚空裂隙', bgTop: '#1a1a1a', bgBottom: '#4a148c', ground: '#000000', gravityMod: 1.0, jumpMod: 1.0, speedMod: 1.5, slideMod: 1.0, scoreThreshold: 12000 },
+  { id: 'JUNGLE', name: '🌿 原始丛林', bgTop: '#1b5e20', bgBottom: '#388e3c', ground: '#2e7d32', gravityMod: 1.0, jumpMod: 1.1, speedMod: 1.0, slideMod: 1.1, scoreThreshold: 15000 },
+  { id: 'DESERT_STORM', name: '🌪️ 沙尘暴', bgTop: '#bf360c', bgBottom: '#d84315', ground: '#e64a19', gravityMod: 1.1, jumpMod: 1.0, speedMod: 1.3, slideMod: 0.9, scoreThreshold: 18000 },
+  { id: 'NEON_DREAM', name: '✨ 霓虹梦境', bgTop: '#c51162', bgBottom: '#6200ea', ground: '#00b8d4', gravityMod: 0.9, jumpMod: 1.3, speedMod: 1.4, slideMod: 1.2, scoreThreshold: 22000 },
 ];
 
 const DIFFICULTY_SETTINGS = {
@@ -1890,6 +1896,8 @@ function GameContent() {
       playerRef.current.isJumping = false;
       playerRef.current.jumps = 0;
       
+      setGameState('playing');
+
       // Clear obstacles near player
       obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 400);
       bossRef.current.projectiles = bossRef.current.projectiles.filter(p => p.x > playerRef.current.x + 400);
@@ -2147,6 +2155,12 @@ function GameContent() {
               setDoc(doc(db, 'users', user.uid), { inventory: newInv }, { merge: true }).catch(err => console.error(err));
             }
             return newInv;
+          });
+          
+          setGameInventory(prev => {
+            const currentAmount = prev[randomType] || 0;
+            if (currentAmount >= 5) return prev; // Cap at 5
+            return { ...prev, [randomType]: currentAmount + 1 };
           });
           
           createParticles(player.x + player.width/2, player.y, POWERUP_CONFIG[randomType].color, 30);
