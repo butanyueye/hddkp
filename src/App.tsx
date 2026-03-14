@@ -565,17 +565,7 @@ function GameContent() {
               const loadedUnlocked = data.unlockedCharacters || ['hdd'];
               const hgteFragments = data.hgteFragments || 0;
               
-              // Strictly enforce: only unlock hgte if fragments >= 78
-              let finalUnlocked = loadedUnlocked.filter(id => id !== 'hgte');
-              if (hgteFragments >= 78) {
-                finalUnlocked.push('hgte');
-              }
-              setUnlockedCharacters(finalUnlocked);
-              
-              // Persist changes if they differ from database
-              if (JSON.stringify(finalUnlocked) !== JSON.stringify(loadedUnlocked)) {
-                await updateDoc(doc(db, 'users', u.uid), { unlockedCharacters: finalUnlocked });
-              }
+              setUnlockedCharacters(loadedUnlocked);
               
               setAvatarId(data.avatarId || 'hdd');
               setFriends(data.friends || []);
@@ -3813,7 +3803,11 @@ function GameContent() {
                         key={char.id}
                         onClick={() => { 
                           if (isHgte && !isUnlocked) {
-                            alert('未拥有呼刚帝尔角色，请前往限定池获取！');
+                            if (hgteFragments >= 78) {
+                              alert('碎片已集齐，请点击卡片上的【合成角色】按钮解锁！');
+                            } else {
+                              alert('未拥有呼刚帝尔角色，请前往限定池获取碎片！');
+                            }
                             return;
                           }
                           if (isUnlocked) {
@@ -3832,12 +3826,36 @@ function GameContent() {
                             <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
                               <Lock size={10} /> {isHgte ? <span className="flex items-center gap-1"><img src={hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> {hgteFragments}/78</span> : `需达到 ${reqScore} 分`}
                             </div>
-                            {canUnlock && !isHgte && (
+                            {(canUnlock && !isHgte) && (
                               <button 
                                 onClick={(e) => { e.stopPropagation(); unlockCharacter(char.id); }}
                                 className="bg-green-500 text-white px-4 py-1 rounded-full text-xs font-black shadow-[0_4px_0_#2e7d32] active:translate-y-1 active:shadow-none animate-bounce"
                               >
                                 点击解锁
+                              </button>
+                            )}
+                            {(isHgte && hgteFragments >= 78) && (
+                              <button 
+                                onClick={async (e) => { 
+                                  e.stopPropagation(); 
+                                  if (user) {
+                                    const newUnlocked = [...unlockedCharacters, 'hgte'];
+                                    setUnlockedCharacters(newUnlocked);
+                                    setHgteFragments(prev => prev - 78);
+                                    try {
+                                      await setDoc(doc(db, 'users', user.uid), {
+                                        unlockedCharacters: newUnlocked,
+                                        hgteFragments: hgteFragments - 78
+                                      }, { merge: true });
+                                      alert('恭喜合成呼刚帝尔角色！');
+                                    } catch (error) {
+                                      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+                                    }
+                                  }
+                                }}
+                                className="bg-yellow-500 text-white px-4 py-1 rounded-full text-xs font-black shadow-[0_4px_0_#f57f17] active:translate-y-1 active:shadow-none animate-bounce"
+                              >
+                                合成角色
                               </button>
                             )}
                           </div>
