@@ -10,6 +10,7 @@ import { hzskillBase64 as hzSkillImg } from './hzskillBase64';
 import { hgteBase64 as hgteImg } from './hgteBase64';
 import { hgteSkillBase64 as hgteSkillImg } from './hgteSkillBase64';
 import { hxdBase64 as hxdImg } from './hxdBase64';
+import ndImg from './nd.png';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -269,6 +270,23 @@ interface Obstacle {
   initialY?: number;
 }
 
+interface Boss {
+  active: boolean;
+  health: number;
+  maxHealth: number;
+  x: number;
+  y: number;
+  vy: number;
+  phase: 'entering' | 'fighting' | 'defeated';
+  attackTimer: number;
+  playerHits: number;
+  maxPlayerHits: number;
+  projectiles: { x: number; y: number; vx: number; vy: number; width: number; height: number; type: 'milk' | 'diaper' }[];
+  attackItems: { x: number; y: number; width: number; height: number; collected: boolean }[];
+  playerProjectiles: { x: number; y: number; vx: number; vy: number; width: number; height: number }[];
+  nextTriggerScore: number;
+}
+
 interface PowerUp {
   x: number;
   y: number;
@@ -433,6 +451,7 @@ function GameContent() {
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
   const [hxdImage, setHxdImage] = useState<HTMLImageElement | null>(null);
   const [hgteSkillImage, setHgteSkillImage] = useState<HTMLImageElement | null>(null);
+  const [ndImage, setNdImage] = useState<HTMLImageElement | null>(null);
   
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -490,6 +509,22 @@ function GameContent() {
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
   const diamondsRef = useRef<Diamond[]>([]);
+  const bossRef = useRef<Boss>({
+    active: false,
+    health: 100,
+    maxHealth: 100,
+    x: 0,
+    y: 0,
+    vy: 2,
+    phase: 'entering',
+    attackTimer: 0,
+    playerHits: 0,
+    maxPlayerHits: 5,
+    projectiles: [],
+    attackItems: [],
+    playerProjectiles: [],
+    nextTriggerScore: 1000
+  });
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef<number>(0);
   const animationRef = useRef<number>(0);
@@ -806,7 +841,7 @@ function GameContent() {
     if (newFragments >= 78 && !newUnlocked.includes('hgte')) {
       newUnlocked.push('hgte');
       setUnlockedCharacters(newUnlocked);
-      alert('恭喜合成呼刚帝尔角色！');
+      setUnlockingChar('hgte');
       newFragments -= 78;
     }
     setHgteFragments(newFragments);
@@ -1503,6 +1538,22 @@ function GameContent() {
     obstaclesRef.current = [];
     powerUpsRef.current = [];
     diamondsRef.current = [];
+    bossRef.current = {
+      active: false,
+      health: 100,
+      maxHealth: 100,
+      x: 0,
+      y: 0,
+      vy: 2,
+      phase: 'entering',
+      attackTimer: 0,
+      playerHits: 0,
+      maxPlayerHits: 5,
+      projectiles: [],
+      attackItems: [],
+      playerProjectiles: [],
+      nextTriggerScore: 1000
+    };
     particlesRef.current = [];
     frameCountRef.current = 0;
     speedRef.current = DIFFICULTY_SETTINGS[difficulty].speed;
@@ -1830,6 +1881,7 @@ function GameContent() {
       
       // Clear obstacles near player
       obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 400);
+      bossRef.current.projectiles = bossRef.current.projectiles.filter(p => p.x > playerRef.current.x + 400);
       
       setGameState('playing');
       startBgm();
@@ -2055,6 +2107,12 @@ function GameContent() {
             createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ef4444', 20);
           });
           obstaclesRef.current.length = 0;
+          
+          // Clear boss projectiles
+          bossRef.current.projectiles.forEach(p => {
+            createParticles(p.x + p.width/2, p.y + p.height/2, '#ef4444', 20);
+          });
+          bossRef.current.projectiles.length = 0;
 
           if (!player.initialDashUsed && selectedCharacter === 'santa') {
             player.shield = 1; // Infinite until hit
@@ -2296,11 +2354,25 @@ function GameContent() {
         spawnRateRef.current = Math.max(60, spawnRateRef.current - 1.5);
       }
 
+      // Boss Trigger
+      if (score >= bossRef.current.nextTriggerScore && !bossRef.current.active) {
+        bossRef.current.active = true;
+        bossRef.current.health = bossRef.current.maxHealth;
+        bossRef.current.phase = 'entering';
+        bossRef.current.x = canvas.width + 200;
+        bossRef.current.y = groundY - 200;
+        bossRef.current.playerHits = 0;
+        bossRef.current.projectiles = [];
+        bossRef.current.attackItems = [];
+        bossRef.current.playerProjectiles = [];
+        playSound('powerup'); // Maybe a different sound for boss warning
+      }
+
       // Spawn Obstacles
       const lastObstacle = obstacles[obstacles.length - 1];
       const minSpacing = 300 + Math.random() * 200; // Ensure at least 300px between obstacles
       
-      if (Math.floor(frameCountRef.current / spawnRateRef.current) > Math.floor(prevFrameCount / spawnRateRef.current)) {
+      if (!bossRef.current.active && Math.floor(frameCountRef.current / spawnRateRef.current) > Math.floor(prevFrameCount / spawnRateRef.current)) {
         if (!lastObstacle || (canvas.width - lastObstacle.x) > minSpacing) {
           const types: ObstacleType[] = ['normal', 'tall', 'wide', 'flying', 'sliding'];
           const type = types[Math.floor(Math.random() * types.length)];
@@ -2340,7 +2412,7 @@ function GameContent() {
       }
 
       // Spawn Power-ups
-      if (Math.floor(frameCountRef.current / 200) > Math.floor(prevFrameCount / 200) && Math.random() > 0.4) {
+      if (!bossRef.current.active && Math.floor(frameCountRef.current / 200) > Math.floor(prevFrameCount / 200) && Math.random() > 0.4) {
         const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
         const type = types[Math.floor(Math.random() * types.length)];
         powerUps.push({
@@ -2354,7 +2426,7 @@ function GameContent() {
       }
 
       // Spawn Diamonds
-      if (Math.floor(frameCountRef.current / 150) > Math.floor(prevFrameCount / 150)) {
+      if (!bossRef.current.active && Math.floor(frameCountRef.current / 150) > Math.floor(prevFrameCount / 150)) {
         diamondsRef.current.push({
           x: canvas.width,
           y: groundY - 50 - Math.random() * 200,
@@ -2362,6 +2434,204 @@ function GameContent() {
           height: 25,
           collected: false
         });
+      }
+
+      // Boss Update
+      if (bossRef.current.active) {
+        const boss = bossRef.current;
+        
+        if (boss.phase === 'entering') {
+          boss.x -= 2 * dt;
+          if (boss.x <= canvas.width - 150) {
+            boss.x = canvas.width - 150;
+            boss.phase = 'fighting';
+          }
+        } else if (boss.phase === 'fighting') {
+          // Hover movement
+          boss.y += boss.vy * dt;
+          if (boss.y < groundY - 300 || boss.y > groundY - 100) {
+            boss.vy *= -1;
+          }
+
+          // Attack
+          boss.attackTimer += dt;
+          if (boss.attackTimer > 100) {
+            boss.attackTimer = 0;
+            boss.projectiles.push({
+              x: boss.x,
+              y: boss.y + 50,
+              vx: - (currentSpeed + 2 + Math.random() * 3),
+              vy: (Math.random() - 0.5) * 2,
+              width: 30,
+              height: 30,
+              type: Math.random() > 0.5 ? 'milk' : 'diaper'
+            });
+          }
+
+          // Spawn attack items for player
+          if (Math.random() < 0.01 * dt) {
+            boss.attackItems.push({
+              x: canvas.width,
+              y: groundY - 50 - Math.random() * 150,
+              width: 40,
+              height: 40,
+              collected: false
+            });
+          }
+        } else if (boss.phase === 'defeated') {
+          boss.y += 5 * dt; // Fall down
+          if (boss.y > canvas.height) {
+            boss.active = false;
+            boss.nextTriggerScore = Math.max(boss.nextTriggerScore + 1000, Math.ceil(score / 1000) * 1000 + 1000);
+            
+            // Bonus rewards
+            setScore(s => s + 500);
+            const nextDiamonds = diamonds + 50;
+            setDiamonds(nextDiamonds);
+            if (user) {
+              setDoc(doc(db, 'users', user.uid), { diamonds: nextDiamonds }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
+            }
+            playSound('powerup');
+          }
+        }
+
+        // Update boss projectiles
+        for (let i = boss.projectiles.length - 1; i >= 0; i--) {
+          const p = boss.projectiles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+
+          // Destroyed by hgte skill
+          if (player.hgteSkillActive > 0 && p.x > player.x && p.x < player.x + 200) {
+            createParticles(p.x + p.width/2, p.y + p.height/2, '#f97316', 30);
+            boss.projectiles.splice(i, 1);
+            continue;
+          }
+
+          // Collision with player
+          if (player.invincibility <= 0 && player.dash <= 0 && player.hjdjSkillActive <= 0 && player.hzSkillSprint <= 0) {
+            if (player.x < p.x + p.width && player.x + player.width > p.x &&
+                player.y < p.y + p.height && player.y + player.height > p.y) {
+              
+              if (player.shield > 0) {
+                player.shield = 0;
+                player.invincibility = 60;
+                playSound('hit');
+                createParticles(player.x, player.y, '#34d399', 20);
+              } else {
+                boss.playerHits++;
+                player.invincibility = 60;
+                playSound('hit');
+                createParticles(player.x, player.y, '#ff0000', 20);
+                
+                if (boss.playerHits >= boss.maxPlayerHits) {
+                  // Handle death
+                  if (selectedCharacter === 'hgte' && !player.hgtePassiveUsed) {
+                    player.hgtePassiveUsed = true;
+                    player.hxdActive = true;
+                    player.invincibility = 180;
+                    boss.playerHits--; // Revert the last hit
+                    playSound('powerup');
+                  } else if (selectedCharacter === 'hz' && player.hzPassiveCharges > 0) {
+                    player.hzPassiveCharges--;
+                    player.invincibility = 120;
+                    boss.playerHits--; // Revert the last hit
+                    playSound('powerup');
+                  } else {
+                    setGameState('gameover');
+                    stopBgm();
+                    playSound('gameover');
+                    checkAchievements(score);
+                    if (user) {
+                      updateLeaderboard(score);
+                      if (isMultiplayer) {
+                        updateMatchScore(score, 'dead');
+                      }
+                    }
+                  }
+                }
+              }
+              boss.projectiles.splice(i, 1);
+              continue;
+            }
+          }
+
+          if (p.x + p.width < 0) {
+            boss.projectiles.splice(i, 1);
+          }
+        }
+
+        // Update attack items
+        for (let i = boss.attackItems.length - 1; i >= 0; i--) {
+          const item = boss.attackItems[i];
+          item.x -= currentSpeed * dt;
+
+          // Magnet effect
+          if (player.magnet > 0 || player.hxdActive) {
+            const dx = player.x - item.x;
+            const dy = player.y - item.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < 300) {
+              item.x += dx * 0.15 * dt;
+              item.y += dy * 0.15 * dt;
+            }
+          }
+
+          if (!item.collected && 
+              player.x < item.x + item.width &&
+              player.x + player.width > item.x &&
+              player.y < item.y + item.height &&
+              player.y + player.height > item.y) {
+            
+            item.collected = true;
+            playSound('score');
+            
+            // Fire player projectile
+            boss.playerProjectiles.push({
+              x: player.x + player.width,
+              y: player.y + player.height / 2,
+              vx: 10,
+              vy: 0,
+              width: 20,
+              height: 20
+            });
+            
+            boss.attackItems.splice(i, 1);
+            continue;
+          }
+
+          if (item.x + item.width < 0) {
+            boss.attackItems.splice(i, 1);
+          }
+        }
+
+        // Update player projectiles
+        for (let i = boss.playerProjectiles.length - 1; i >= 0; i--) {
+          const p = boss.playerProjectiles[i];
+          p.x += p.vx * dt;
+
+          // Collision with boss
+          if (boss.phase === 'fighting' && 
+              p.x < boss.x + 150 && p.x + p.width > boss.x &&
+              p.y < boss.y + 150 && p.y + p.height > boss.y) {
+            
+            boss.health -= 10;
+            createParticles(boss.x + 75, boss.y + 75, '#ffff00', 20);
+            playSound('hit');
+            
+            if (boss.health <= 0) {
+              boss.phase = 'defeated';
+              playSound('powerup');
+            }
+            
+            boss.playerProjectiles.splice(i, 1);
+            continue;
+          }
+
+          if (p.x > canvas.width) {
+            boss.playerProjectiles.splice(i, 1);
+          }
+        }
       }
 
       // Update Power-ups
@@ -2802,6 +3072,78 @@ function GameContent() {
         ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
       });
 
+      // Boss Rendering
+      if (bossRef.current.active) {
+        const boss = bossRef.current;
+        
+        // Draw Boss
+        if (ndImage) {
+          ctx.drawImage(ndImage, boss.x, boss.y, 150, 150);
+        } else {
+          ctx.fillStyle = '#8b5cf6';
+          ctx.fillRect(boss.x, boss.y, 150, 150);
+          ctx.fillStyle = 'white';
+          ctx.font = '20px sans-serif';
+          ctx.fillText('奶帝', boss.x + 50, boss.y + 80);
+        }
+
+        // Draw Health Bar
+        ctx.fillStyle = '#333';
+        ctx.fillRect(canvas.width / 2 - 200, 20, 400, 20);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(canvas.width / 2 - 200, 20, 400 * (boss.health / boss.maxHealth), 20);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 200, 20, 400, 20);
+        ctx.fillStyle = 'white';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`奶帝 HP: ${boss.health}/${boss.maxHealth}`, canvas.width / 2, 35);
+        ctx.textAlign = 'left';
+
+        // Draw Player Hits (Hearts)
+        for (let i = 0; i < boss.maxPlayerHits; i++) {
+          ctx.fillStyle = i < boss.maxPlayerHits - boss.playerHits ? '#ef4444' : '#4b5563';
+          ctx.beginPath();
+          const hx = 20 + i * 30;
+          const hy = 20;
+          ctx.arc(hx + 10, hy + 10, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Draw Boss Projectiles
+        boss.projectiles.forEach(p => {
+          ctx.fillStyle = p.type === 'milk' ? '#f3f4f6' : '#d1d5db';
+          ctx.beginPath();
+          ctx.arc(p.x + p.width/2, p.y + p.height/2, p.width/2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#9ca3af';
+          ctx.stroke();
+        });
+
+        // Draw Attack Items
+        boss.attackItems.forEach(item => {
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.moveTo(item.x + item.width/2, item.y);
+          ctx.lineTo(item.x + item.width, item.y + item.height/2);
+          ctx.lineTo(item.x + item.width/2, item.y + item.height);
+          ctx.lineTo(item.x, item.y + item.height/2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#b45309';
+          ctx.stroke();
+        });
+
+        // Draw Player Projectiles
+        boss.playerProjectiles.forEach(p => {
+          ctx.fillStyle = '#3b82f6';
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+          ctx.strokeStyle = 'white';
+          ctx.strokeRect(p.x, p.y, p.width, p.height);
+        });
+      }
+
       // Player
       const player = playerRef.current;
 
@@ -2981,6 +3323,10 @@ function GameContent() {
     const skillImgObj = new Image();
     skillImgObj.onload = () => setHgteSkillImage(skillImgObj);
     skillImgObj.src = hgteSkillImg;
+
+    const ndImgObj = new Image();
+    ndImgObj.onload = () => setNdImage(ndImgObj);
+    ndImgObj.src = ndImg;
   }, [selectedCharacter]);
 
   return (
@@ -3841,13 +4187,13 @@ function GameContent() {
                                   if (user) {
                                     const newUnlocked = [...unlockedCharacters, 'hgte'];
                                     setUnlockedCharacters(newUnlocked);
+                                    setUnlockingChar('hgte');
                                     setHgteFragments(prev => prev - 78);
                                     try {
                                       await setDoc(doc(db, 'users', user.uid), {
                                         unlockedCharacters: newUnlocked,
                                         hgteFragments: hgteFragments - 78
                                       }, { merge: true });
-                                      alert('恭喜合成呼刚帝尔角色！');
                                     } catch (error) {
                                       handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
                                     }
