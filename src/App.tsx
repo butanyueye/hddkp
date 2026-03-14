@@ -2156,7 +2156,8 @@ function GameContent() {
 
       // Continuous scoring
       setScore(s => {
-        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1);
+        const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
         
@@ -2809,7 +2810,8 @@ function GameContent() {
             createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ef4444', 20);
             obstacles.splice(i, 1);
             setScore(s => {
-              const newScore = s + 5;
+              const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+              const newScore = s + 5 * dashMultiplier;
               checkAchievements(newScore);
               
               if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -2879,7 +2881,8 @@ function GameContent() {
           obs.passed = true;
           playSound('score');
           setScore(s => {
-            const newScore = s + (player.doubleScore > 0 ? 2 : 1);
+            const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 5 : 1;
+            const newScore = s + (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
             checkAchievements(newScore);
             
             if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -3785,28 +3788,6 @@ function GameContent() {
           </div>
         )}
 
-        {/* Difficulty Selector (Playing) */}
-        {gameState === 'playing' && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-black/50 p-1.5 rounded-full border border-white/20">
-            {(['easy', 'normal', 'hard'] as Difficulty[]).map(d => (
-              <button
-                key={d}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDifficultyChange(d);
-                }}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                  difficulty === d 
-                    ? 'bg-yellow-500 text-black' 
-                    : 'text-white hover:bg-white/20'
-                }`}
-              >
-                {DIFFICULTY_SETTINGS[d].label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Inventory Buttons (Playing) */}
         {gameState === 'playing' && (
           <div className="absolute bottom-32 right-4 z-10 flex flex-col gap-3">
@@ -4054,26 +4035,6 @@ function GameContent() {
 
               {/* Bottom Area */}
               <div className="w-full flex flex-col items-center gap-4 mt-4 z-20">
-                {/* Difficulty Selector */}
-                <div className="flex gap-2 bg-black/30 p-1.5 rounded-full border border-white/20 backdrop-blur-sm">
-                  {(['easy', 'normal', 'hard'] as Difficulty[]).map(d => (
-                    <button
-                      key={d}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDifficulty(d);
-                      }}
-                      className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${
-                        difficulty === d 
-                          ? 'bg-yellow-500 text-black' 
-                          : 'text-white hover:bg-white/20'
-                      }`}
-                    >
-                      {DIFFICULTY_SETTINGS[d].label}
-                    </button>
-                  ))}
-                </div>
-
                 {/* Agreement */}
                 <div className="flex items-center gap-2 text-xs text-white/90">
                   <div className="w-4 h-4 bg-white rounded flex items-center justify-center text-black">
@@ -4127,7 +4088,7 @@ function GameContent() {
                       name: '圣诞老呼', 
                       img: santaImg, 
                       skill: '技能：圣诞麋鹿的眷顾', 
-                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺15秒，并在冲刺结束后获得永久护盾。冲刺时间增长5秒。' 
+                      desc: '开局获得圣诞麋鹿的恩赐，无敌冲刺15秒，并在冲刺结束后获得永久护盾。冲刺时间增长5秒。冲刺期间获得5倍得分！' 
                     },
                     { 
                       id: 'hjdj', 
