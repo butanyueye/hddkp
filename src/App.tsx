@@ -61,6 +61,30 @@ type Difficulty = 'easy' | 'normal' | 'hard';
 type ObstacleType = 'normal' | 'tall' | 'wide' | 'flying' | 'sliding';
 type PowerUpType = 'shield' | 'magnet' | 'doubleScore' | 'dash';
 
+type BiomeType = 'FOREST' | 'DESERT' | 'ICE' | 'CYBER' | 'SPACE';
+type WeatherType = 'CLEAR' | 'RAIN' | 'WIND_FORWARD' | 'WIND_BACKWARD' | 'SNOW';
+
+interface Biome {
+  id: BiomeType;
+  name: string;
+  bgTop: string;
+  bgBottom: string;
+  ground: string;
+  gravityMod: number;
+  jumpMod: number;
+  speedMod: number;
+  slideMod: number;
+  scoreThreshold: number;
+}
+
+const BIOMES: Biome[] = [
+  { id: 'FOREST', name: '🌲 绿野森林', bgTop: '#87CEEB', bgBottom: '#e0f6ff', ground: '#4caf50', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1, scoreThreshold: 0 },
+  { id: 'DESERT', name: '🌵 狂野沙漠', bgTop: '#FFB75E', bgBottom: '#ED8F03', ground: '#e6c229', gravityMod: 1, jumpMod: 1, speedMod: 1.1, slideMod: 1, scoreThreshold: 1000 },
+  { id: 'ICE', name: '❄️ 极寒冰原', bgTop: '#a1c4fd', bgBottom: '#c2e9fb', ground: '#e0f7fa', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1.5, scoreThreshold: 2000 },
+  { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.2, jumpMod: 1.1, speedMod: 1.2, slideMod: 1, scoreThreshold: 3500 },
+  { id: 'SPACE', name: '🌌 浩瀚星空', bgTop: '#000000', bgBottom: '#1a0b2e', ground: '#424242', gravityMod: 0.6, jumpMod: 1.2, speedMod: 0.9, slideMod: 1, scoreThreshold: 5000 },
+];
+
 const DIFFICULTY_SETTINGS = {
   easy: { speed: 3, spawnRate: 150, label: '简单' },
   normal: { speed: 5, spawnRate: 110, label: '普通' },
@@ -416,6 +440,16 @@ function GameContent() {
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [matchMessage, setMatchMessage] = useState('');
   
+  const envRef = useRef({
+    biomeIndex: 0,
+    weather: 'CLEAR' as WeatherType,
+    weatherTimer: 0,
+    weatherParticles: [] as {x: number, y: number, vx: number, vy: number, size: number, type: string, life: number}[],
+    biomeTransition: 0,
+    announcement: '',
+    announcementTimer: 0
+  });
+
   const playerRef = useRef<Player>({ 
     x: 80, y: 0, width: 60, height: 120, vy: 0, 
     isJumping: false, jumps: 0, 
@@ -1416,6 +1450,16 @@ function GameContent() {
     setReviveCount(0);
     scoreAccumulatorRef.current = 0;
     
+    envRef.current = {
+      biomeIndex: 0,
+      weather: 'CLEAR',
+      weatherTimer: 0,
+      weatherParticles: [],
+      biomeTransition: 0,
+      announcement: '🌲 绿野森林',
+      announcementTimer: 120
+    };
+    
     // Initialize game inventory with a cap of 5
     setGameInventory({
       shield: Math.min(inventory.shield || 0, 5),
@@ -1892,7 +1936,8 @@ function GameContent() {
     const maxJumpsAllowed = selectedCharacter === 'hgte' ? (player.hgtePassiveUsed ? 2 : 1) : MAX_JUMPS;
     if (player.jumps < maxJumpsAllowed) {
       playSound('jump');
-      player.vy = JUMP_STRENGTH;
+      const currentBiome = BIOMES[envRef.current.biomeIndex];
+      player.vy = JUMP_STRENGTH * currentBiome.jumpMod;
       player.jumps++;
       player.isJumping = true;
       createParticles(player.x + player.width / 2, player.y + player.height, '#fff', 10);
@@ -1907,7 +1952,8 @@ function GameContent() {
       player.vy = 2000; // High velocity to trigger landing particles
     } else if (!player.isSliding) {
       player.isSliding = true;
-      player.slideTimer = 60; // 1 second at 60fps
+      const currentBiome = BIOMES[envRef.current.biomeIndex];
+      player.slideTimer = 60 * currentBiome.slideMod; // 1 second at 60fps
       player.height = 60; // Half height
       player.y += 60; // Move down to stay on ground
       createParticles(player.x + player.width / 2, player.y + player.height, '#fff', 5);
@@ -2044,12 +2090,92 @@ function GameContent() {
         return s;
       });
 
+      // Biome Logic
+      let currentBiomeIndex = 0;
+      for (let i = BIOMES.length - 1; i >= 0; i--) {
+        if (score >= BIOMES[i].scoreThreshold) {
+          currentBiomeIndex = i;
+          break;
+        }
+      }
+      
+      if (envRef.current.biomeIndex !== currentBiomeIndex) {
+        envRef.current.biomeIndex = currentBiomeIndex;
+        envRef.current.biomeTransition = 1.0;
+        envRef.current.announcement = BIOMES[currentBiomeIndex].name;
+        envRef.current.announcementTimer = 180; // 3 seconds at 60fps
+      }
+
+      if (envRef.current.biomeTransition > 0) {
+        envRef.current.biomeTransition = Math.max(0, envRef.current.biomeTransition - 0.01 * dt);
+      }
+      if (envRef.current.announcementTimer > 0) {
+        envRef.current.announcementTimer -= dt;
+      }
+
+      const currentBiome = BIOMES[envRef.current.biomeIndex];
+
+      // Weather Logic
+      envRef.current.weatherTimer -= dt;
+      if (envRef.current.weatherTimer <= 0) {
+        const weathers: WeatherType[] = ['CLEAR', 'RAIN', 'WIND_FORWARD', 'WIND_BACKWARD', 'SNOW'];
+        envRef.current.weather = weathers[Math.floor(Math.random() * weathers.length)];
+        envRef.current.weatherTimer = 600 + Math.random() * 600; // 10 to 20 seconds
+        
+        let weatherName = '';
+        if (envRef.current.weather === 'RAIN') weatherName = '🌧️ 暴雨来袭 (视线模糊)';
+        else if (envRef.current.weather === 'WIND_FORWARD') weatherName = '💨 顺风 (加速)';
+        else if (envRef.current.weather === 'WIND_BACKWARD') weatherName = '🌪️ 逆风 (减速)';
+        else if (envRef.current.weather === 'SNOW') weatherName = '❄️ 暴雪 (视线受阻)';
+        else weatherName = '☀️ 晴空万里';
+        
+        envRef.current.announcement = weatherName;
+        envRef.current.announcementTimer = 180;
+      }
+
+      // Update Weather Particles
+      if (envRef.current.weather === 'RAIN' || envRef.current.weather === 'SNOW') {
+        if (Math.random() < (envRef.current.weather === 'RAIN' ? 0.5 : 0.2)) {
+          envRef.current.weatherParticles.push({
+            x: Math.random() * canvas.width,
+            y: -20,
+            vx: envRef.current.weather === 'RAIN' ? -2 : -1,
+            vy: envRef.current.weather === 'RAIN' ? 15 : 3,
+            size: envRef.current.weather === 'RAIN' ? 2 : Math.random() * 3 + 1,
+            type: envRef.current.weather,
+            life: 0
+          });
+        }
+      } else if (envRef.current.weather === 'WIND_FORWARD' || envRef.current.weather === 'WIND_BACKWARD') {
+        if (Math.random() < 0.2) {
+          envRef.current.weatherParticles.push({
+            x: envRef.current.weather === 'WIND_FORWARD' ? -50 : canvas.width + 50,
+            y: Math.random() * canvas.height,
+            vx: envRef.current.weather === 'WIND_FORWARD' ? 20 : -20,
+            vy: 0,
+            size: Math.random() * 2 + 1,
+            type: 'WIND',
+            life: 0
+          });
+        }
+      }
+
+      for (let i = envRef.current.weatherParticles.length - 1; i >= 0; i--) {
+        const wp = envRef.current.weatherParticles[i];
+        wp.x += wp.vx * dt;
+        wp.y += wp.vy * dt;
+        wp.life += dt;
+        if (wp.y > canvas.height || wp.x < -100 || wp.x > canvas.width + 100 || wp.life > 300) {
+          envRef.current.weatherParticles.splice(i, 1);
+        }
+      }
+
       // Physics
       if (player.dash > 0 || player.hjdjSkillActive > 0) {
         player.vy = 0;
         player.y = groundY - player.height;
       } else {
-        player.vy += GRAVITY * dt;
+        player.vy += GRAVITY * currentBiome.gravityMod * dt;
         player.y += player.vy * dt;
       }
 
@@ -2097,7 +2223,8 @@ function GameContent() {
       const prevFrameCount = frameCountRef.current;
       frameCountRef.current += dt;
       
-      const currentSpeed = speedRef.current * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
+      const weatherSpeedMod = envRef.current.weather === 'WIND_FORWARD' ? 1.3 : envRef.current.weather === 'WIND_BACKWARD' ? 0.7 : 1;
+      const currentSpeed = speedRef.current * currentBiome.speedMod * weatherSpeedMod * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
 
       if (Math.floor(frameCountRef.current / 600) > Math.floor(prevFrameCount / 600)) {
         const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 6;
@@ -2407,18 +2534,35 @@ function GameContent() {
     };
 
     const draw = () => {
-      // Day/Night Cycle based on score
-      const cycle = (score / 100) % 2; // 0 to 2
-      let skyColorTop, skyColorBottom;
-      
-      if (cycle < 0.5) { // Day to Sunset
-        skyColorTop = '#0f172a'; skyColorBottom = '#334155';
-      } else if (cycle < 1) { // Sunset to Night
-        skyColorTop = '#1e1b4b'; skyColorBottom = '#4338ca';
-      } else if (cycle < 1.5) { // Night to Sunrise
-        skyColorTop = '#020617'; skyColorBottom = '#0f172a';
-      } else { // Sunrise to Day
-        skyColorTop = '#312e81'; skyColorBottom = '#4f46e5';
+      const currentBiome = BIOMES[envRef.current.biomeIndex];
+      let skyColorTop = currentBiome.bgTop;
+      let skyColorBottom = currentBiome.bgBottom;
+      let groundColor = currentBiome.ground;
+
+      // Blend colors if transitioning
+      if (envRef.current.biomeTransition > 0 && envRef.current.biomeIndex > 0) {
+        const prevBiome = BIOMES[envRef.current.biomeIndex - 1];
+        const t = envRef.current.biomeTransition;
+        
+        // Simple hex to rgb interpolation helper
+        const hexToRgb = (hex: string) => {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return {r, g, b};
+        };
+        const blend = (c1: string, c2: string, t: number) => {
+          const rgb1 = hexToRgb(c1);
+          const rgb2 = hexToRgb(c2);
+          const r = Math.round(rgb1.r * t + rgb2.r * (1 - t));
+          const g = Math.round(rgb1.g * t + rgb2.g * (1 - t));
+          const b = Math.round(rgb1.b * t + rgb2.b * (1 - t));
+          return `rgb(${r},${g},${b})`;
+        };
+
+        skyColorTop = blend(prevBiome.bgTop, currentBiome.bgTop, t);
+        skyColorBottom = blend(prevBiome.bgBottom, currentBiome.bgBottom, t);
+        groundColor = blend(prevBiome.ground, currentBiome.ground, t);
       }
 
       const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -2438,10 +2582,43 @@ function GameContent() {
       });
 
       // Ground
-      ctx.fillStyle = '#1c1917'; // stone-900
+      ctx.fillStyle = groundColor;
       ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
-      ctx.fillStyle = '#44403c'; // stone-700
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.fillRect(0, groundY, canvas.width, 10);
+
+      // Weather Particles
+      envRef.current.weatherParticles.forEach(wp => {
+        if (wp.type === 'RAIN') {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.lineWidth = wp.size;
+          ctx.beginPath();
+          ctx.moveTo(wp.x, wp.y);
+          ctx.lineTo(wp.x + wp.vx * 2, wp.y + wp.vy * 2);
+          ctx.stroke();
+        } else if (wp.type === 'SNOW') {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.beginPath();
+          ctx.arc(wp.x, wp.y, wp.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (wp.type === 'WIND') {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = wp.size;
+          ctx.beginPath();
+          ctx.moveTo(wp.x, wp.y);
+          ctx.lineTo(wp.x + wp.vx * 3, wp.y);
+          ctx.stroke();
+        }
+      });
+
+      // Weather Overlay
+      if (envRef.current.weather === 'RAIN') {
+        ctx.fillStyle = 'rgba(0, 0, 50, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (envRef.current.weather === 'SNOW') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
 
       // Particles
       particlesRef.current.forEach(p => {
@@ -2652,6 +2829,20 @@ function GameContent() {
           ctx.fillStyle = '#8B4513';
           ctx.fillRect(0, -5, 80, 10);
         }
+        ctx.restore();
+      }
+
+      // Draw Announcement
+      if (envRef.current.announcementTimer > 0) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, envRef.current.announcementTimer / 30);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, canvas.height / 4 - 30, canvas.width, 60);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 32px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(envRef.current.announcement, canvas.width / 2, canvas.height / 4);
         ctx.restore();
       }
 
