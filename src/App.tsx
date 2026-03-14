@@ -523,7 +523,7 @@ function GameContent() {
     projectiles: [],
     attackItems: [],
     playerProjectiles: [],
-    nextTriggerScore: 1000
+    nextTriggerScore: 500
   });
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef<number>(0);
@@ -1552,7 +1552,7 @@ function GameContent() {
       projectiles: [],
       attackItems: [],
       playerProjectiles: [],
-      nextTriggerScore: 1000
+      nextTriggerScore: 500
     };
     particlesRef.current = [];
     frameCountRef.current = 0;
@@ -2482,11 +2482,11 @@ function GameContent() {
           boss.y += 5 * dt; // Fall down
           if (boss.y > canvas.height) {
             boss.active = false;
-            boss.nextTriggerScore = Math.max(boss.nextTriggerScore + 1000, Math.ceil(score / 1000) * 1000 + 1000);
+            boss.nextTriggerScore += 3000;
             
             // Bonus rewards
-            setScore(s => s + 500);
-            const nextDiamonds = diamonds + 50;
+            setScore(s => s + 2000);
+            const nextDiamonds = diamonds + 666;
             setDiamonds(nextDiamonds);
             if (user) {
               setDoc(doc(db, 'users', user.uid), { diamonds: nextDiamonds }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
