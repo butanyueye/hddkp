@@ -700,12 +700,13 @@ function GameContent() {
     }
 
     const newCount = (checkInCount % 7) + 1;
-    const newDiamonds = diamonds + 666;
+    const reward = newCount === 7 ? 9999 : 8888;
+    const newDiamonds = diamonds + reward;
     
     setDiamonds(newDiamonds);
     setCheckInCount(newCount);
     setHasCheckedInToday(true);
-    setCheckInMessage('签到成功！获得 666 钻石💎');
+    setCheckInMessage(`签到成功！获得 ${reward} 钻石💎`);
     setTimeout(() => setCheckInMessage(''), 3000);
 
     try {
@@ -2831,7 +2832,7 @@ function GameContent() {
               </div>
               
               <div className="w-full bg-[#ffcc80]/30 py-2 px-4 rounded-xl border-2 border-[#ffb300]/30 mb-6 text-center">
-                <p className="text-[#d84315] font-bold text-sm">内测送钻石，每天领取 <span className="text-blue-600 font-black text-lg">666</span> 💎</p>
+                <p className="text-[#d84315] font-bold text-sm">内测送钻石，每天领取 <span className="text-blue-600 font-black text-lg">8888</span> 💎</p>
               </div>
 
               <div className="grid grid-cols-4 gap-2 w-full mb-6">
@@ -2841,7 +2842,7 @@ function GameContent() {
                     <div key={i} className={`flex flex-col items-center justify-center p-2 rounded-2xl border-2 ${i === 6 ? 'col-span-2 bg-gradient-to-br from-[#ffe082] to-[#ffca28] border-[#ff8f00]' : 'bg-white border-[#ffe082]'} shadow-sm relative overflow-hidden`}>
                       <div className="text-[#e65100] font-black text-xs mb-1">第{i + 1}天</div>
                       <div className="text-xl drop-shadow-sm">💎</div>
-                      <div className="text-blue-600 font-black text-sm mt-1">666</div>
+                      <div className="text-blue-600 font-black text-sm mt-1">{i === 6 ? 9999 : 8888}</div>
                       {isCheckedIn && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
                           <span className="text-3xl drop-shadow-md">✅</span>
