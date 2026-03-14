@@ -2455,13 +2455,13 @@ function GameContent() {
 
           // Attack
           boss.attackTimer += dt;
-          if (boss.attackTimer > 100) {
+          if (boss.attackTimer > 200) { // Increased from 100 to 200
             boss.attackTimer = 0;
             boss.projectiles.push({
               x: boss.x,
               y: boss.y + 50,
-              vx: - (currentSpeed + 2 + Math.random() * 3),
-              vy: (Math.random() - 0.5) * 2,
+              vx: - (currentSpeed + 1 + Math.random() * 2), // Reduced speed
+              vy: (Math.random() - 0.5) * 1.5, // Reduced vertical speed
               width: 30,
               height: 30,
               type: Math.random() > 0.5 ? 'milk' : 'diaper'
@@ -2492,6 +2492,8 @@ function GameContent() {
               setDoc(doc(db, 'users', user.uid), { diamonds: nextDiamonds }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
             }
             playSound('powerup');
+            envRef.current.announcement = '击败奶帝！获得 2000 分和 666 钻石！';
+            envRef.current.announcementTimer = 120; // Show for 2 seconds (assuming 60fps)
           }
         }
 
@@ -3089,16 +3091,16 @@ function GameContent() {
 
         // Draw Health Bar
         ctx.fillStyle = '#333';
-        ctx.fillRect(canvas.width / 2 - 200, 20, 400, 20);
+        ctx.fillRect(canvas.width / 2 - 200, 120, 400, 20);
         ctx.fillStyle = '#ef4444';
-        ctx.fillRect(canvas.width / 2 - 200, 20, 400 * (boss.health / boss.maxHealth), 20);
+        ctx.fillRect(canvas.width / 2 - 200, 120, 400 * (boss.health / boss.maxHealth), 20);
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 200, 20, 400, 20);
+        ctx.strokeRect(canvas.width / 2 - 200, 120, 400, 20);
         ctx.fillStyle = 'white';
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`奶帝 HP: ${boss.health}/${boss.maxHealth}`, canvas.width / 2, 35);
+        ctx.fillText(`奶帝 HP: ${boss.health}/${boss.maxHealth}`, canvas.width / 2, 135);
         ctx.textAlign = 'left';
 
         // Draw Player Hits (Hearts)
