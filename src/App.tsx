@@ -79,9 +79,9 @@ interface Biome {
 
 const BIOMES: Biome[] = [
   { id: 'FOREST', name: '🌲 绿野森林', bgTop: '#87CEEB', bgBottom: '#e0f6ff', ground: '#4caf50', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1, scoreThreshold: 0 },
-  { id: 'DESERT', name: '🌵 狂野沙漠', bgTop: '#FFB75E', bgBottom: '#ED8F03', ground: '#e6c229', gravityMod: 1, jumpMod: 1, speedMod: 1.1, slideMod: 1, scoreThreshold: 1000 },
+  { id: 'DESERT', name: '🌵 狂野沙漠', bgTop: '#FFB75E', bgBottom: '#ED8F03', ground: '#e6c229', gravityMod: 1, jumpMod: 1, speedMod: 1.05, slideMod: 1, scoreThreshold: 1000 },
   { id: 'ICE', name: '❄️ 极寒冰原', bgTop: '#a1c4fd', bgBottom: '#c2e9fb', ground: '#e0f7fa', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1.5, scoreThreshold: 2000 },
-  { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.2, jumpMod: 1.1, speedMod: 1.2, slideMod: 1, scoreThreshold: 3500 },
+  { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.1, jumpMod: 1.1, speedMod: 1.1, slideMod: 1, scoreThreshold: 3500 },
   { id: 'SPACE', name: '🌌 浩瀚星空', bgTop: '#000000', bgBottom: '#1a0b2e', ground: '#424242', gravityMod: 0.6, jumpMod: 1.2, speedMod: 0.9, slideMod: 1, scoreThreshold: 5000 },
 ];
 
@@ -1796,10 +1796,10 @@ function GameContent() {
 
   const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
     setDifficulty(newDifficulty);
-    const timeFactor = Math.floor(frameCountRef.current / 600);
-    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 6;
-    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.3);
-    spawnRateRef.current = Math.max(50, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 3);
+    const timeFactor = Math.floor(frameCountRef.current / 1000);
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 4;
+    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.15);
+    spawnRateRef.current = Math.max(60, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 1.5);
   }, []);
 
   const resumeGame = useCallback(() => {
@@ -1833,13 +1833,13 @@ function GameContent() {
       }
 
       // Reset player state for continuation
-      playerRef.current.shield = 180; // 3 seconds invincibility
+      playerRef.current.invincibility = 180; // 3 seconds invincibility
       playerRef.current.vy = 0;
       playerRef.current.isJumping = false;
       playerRef.current.jumps = 0;
       
       // Clear obstacles near player
-      obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 300);
+      obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 400);
       
       setGameState('playing');
       startBgm();
@@ -2298,12 +2298,12 @@ function GameContent() {
         bgmAudio.playbackRate += (targetRate - bgmAudio.playbackRate) * 0.05;
       }
 
-      if (Math.floor(frameCountRef.current / 600) > Math.floor(prevFrameCount / 600)) {
-        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 6;
+      if (Math.floor(frameCountRef.current / 1000) > Math.floor(prevFrameCount / 1000)) {
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 4;
         if (speedRef.current < maxSpeed) {
-          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.3);
+          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.15);
         }
-        spawnRateRef.current = Math.max(50, spawnRateRef.current - 3);
+        spawnRateRef.current = Math.max(60, spawnRateRef.current - 1.5);
       }
 
       // Spawn Obstacles
@@ -3881,15 +3881,23 @@ function GameContent() {
               <p className="text-2xl text-white mb-10 font-medium">Score: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
               
               <div className="flex flex-col gap-4 w-full px-10">
-                <button 
-                  onClick={revive}
-                  disabled={diamonds < [50, 100, 200][reviveCount]}
-                  className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < [50, 100, 200][reviveCount] ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                  style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
-                >
-                  <span>复活</span>
-                  <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 {[50, 100, 200][reviveCount]}</span>
-                </button>
+                {reviveCount < 3 && (
+                  <button 
+                    onClick={revive}
+                    disabled={diamonds < [50, 100, 200][reviveCount]}
+                    className={`w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] flex items-center justify-center gap-2 ${diamonds < [50, 100, 200][reviveCount] ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                    style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
+                  >
+                    <span>复活</span>
+                    <span className="text-lg bg-black/20 px-2 py-0.5 rounded-full border border-white/20">💎 {[50, 100, 200][reviveCount]}</span>
+                  </button>
+                )}
+
+                {reviveCount >= 3 && (
+                  <div className="w-full py-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-200 text-center font-bold">
+                    已达到最大复活次数
+                  </div>
+                )}
 
                 <button 
                   onClick={showInstructions}
