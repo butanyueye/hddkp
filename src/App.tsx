@@ -93,12 +93,15 @@ const BIOMES: Biome[] = [
 ];
 
 const TITLES = {
-  'rookie': { name: '🌱 初出茅庐', color: '#81c784', rarity: 'common', shadow: 'none', animate: false },
-  'expert': { name: '🏃 跑酷达人', color: '#64b5f6', rarity: 'rare', shadow: '0 0 5px #2196f3', animate: false },
-  'void_walker': { name: '🌀 虚空行者', color: '#9575cd', rarity: 'epic', shadow: '0 0 8px #673ab7', animate: false },
-  'neon_dreamer': { name: '✨ 霓虹之梦', color: '#f06292', rarity: 'epic', shadow: '0 0 10px #e91e63', animate: false },
-  'king': { name: '👑 至尊王者', color: '#ffd54f', rarity: 'legendary', shadow: '0 0 15px #ffb300', animate: true },
-  'hdd_shadow': { name: '👤 呼大帝之影', color: '#4fc3f7', rarity: 'legendary', shadow: '0 0 15px #03a9f4', animate: true },
+  'rookie': { name: '🌱 初出茅庐', color: '#81c784', rarity: 'common', shadow: 'none', effect: 'none' },
+  'expert': { name: '🏃 跑酷达人', color: '#64b5f6', rarity: 'rare', shadow: '0 0 5px #2196f3', effect: 'none' },
+  'void_walker': { name: '🌀 虚空行者', color: '#9575cd', rarity: 'epic', shadow: '0 0 8px #673ab7', effect: 'pulse' },
+  'neon_dreamer': { name: '✨ 霓虹之梦', color: '#f06292', rarity: 'epic', shadow: '0 0 10px #e91e63', effect: 'glow' },
+  'speed_demon': { name: '⚡ 极速狂魔', color: '#ff5722', rarity: 'epic', shadow: '0 0 12px #ff9800', effect: 'shake' },
+  'diamond_king': { name: '💎 钻石之王', color: '#00bcd4', rarity: 'legendary', shadow: '0 0 15px #00e5ff', effect: 'rotate' },
+  'king': { name: '👑 至尊王者', color: '#ffd54f', rarity: 'legendary', shadow: '0 0 15px #ffb300', effect: 'pulse' },
+  'hdd_shadow': { name: '👤 呼大帝之影', color: '#4fc3f7', rarity: 'legendary', shadow: '0 0 15px #03a9f4', effect: 'glow' },
+  'god_mode': { name: '🔥 降临神罚', color: '#f44336', rarity: 'legendary', shadow: '0 0 20px #d32f2f', effect: 'shake' },
 };
 
 type TitleId = keyof typeof TITLES;
@@ -3329,7 +3332,7 @@ function GameContent() {
           
           // Animate pulse if needed
           let alpha = 1;
-          if (title.animate) {
+          if (title.effect === 'pulse' || title.effect === 'glow' || title.effect === 'shake' || title.effect === 'rotate') {
             alpha = 0.7 + Math.sin(frameCountRef.current / 10) * 0.3;
           }
           
@@ -3604,7 +3607,7 @@ function GameContent() {
                         <div className="flex justify-between items-center">
                           <div className="flex flex-col">
                             <span 
-                              className={`text-lg font-black ${title.animate ? 'animate-pulse' : ''}`}
+                              className={`text-lg font-black ${title.effect === 'pulse' ? 'animate-pulse' : title.effect === 'rotate' ? 'animate-spin' : title.effect === 'shake' ? 'animate-bounce' : ''}`}
                               style={{ 
                                 color: title.color,
                                 textShadow: title.shadow
@@ -4112,7 +4115,7 @@ function GameContent() {
                       </div>
                       {selectedTitle && TITLES[selectedTitle] && (
                         <span 
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[selectedTitle].animate ? 'animate-pulse' : ''}`}
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[selectedTitle].effect === 'pulse' ? 'animate-pulse' : TITLES[selectedTitle].effect === 'rotate' ? 'animate-spin' : ''}`}
                           style={{ 
                             color: TITLES[selectedTitle].color, 
                             backgroundColor: `${TITLES[selectedTitle].color}20`,
@@ -4722,7 +4725,7 @@ function GameContent() {
                           </div>
                           {entry.titleId && TITLES[entry.titleId] && (
                             <span 
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].animate ? 'animate-pulse' : ''}`}
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : ''}`}
                               style={{ 
                                 color: TITLES[entry.titleId].color, 
                                 backgroundColor: `${TITLES[entry.titleId].color}20`,
