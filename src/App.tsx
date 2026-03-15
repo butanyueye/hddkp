@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
@@ -147,6 +147,25 @@ const SHOP_ITEMS = {
   magnet: { name: '磁铁', cost: 30, description: '自动吸引附近的道具和钻石' },
   doubleScore: { name: '双倍积分', cost: 40, description: '获得积分翻倍' },
   dash: { name: '冲刺', cost: 60, description: '无敌冲刺并摧毁障碍物' }
+};
+
+const RANK_SYSTEM = [
+  { name: '青铜', minRP: 0, color: '#cd7f32', icon: '🥉' },
+  { name: '白银', minRP: 1200, color: '#c0c0c0', icon: '🥈' },
+  { name: '黄金', minRP: 1400, color: '#ffd700', icon: '🥇' },
+  { name: '铂金', minRP: 1600, color: '#00e5ff', icon: '💎' },
+  { name: '钻石', minRP: 1800, color: '#b388ff', icon: '💠' },
+  { name: '星耀', minRP: 2000, color: '#ff4081', icon: '🌟' },
+  { name: '王者', minRP: 2200, color: '#ff1744', icon: '👑' }
+];
+
+const getRankInfo = (rp: number) => {
+  for (let i = RANK_SYSTEM.length - 1; i >= 0; i--) {
+    if (rp >= RANK_SYSTEM[i].minRP) {
+      return RANK_SYSTEM[i];
+    }
+  }
+  return RANK_SYSTEM[0];
 };
 
 const CHARACTER_REQUIREMENTS: Record<string, number> = {
@@ -477,6 +496,9 @@ function GameContent() {
   const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'shop' | 'gacha'>('start');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [rankPoints, setRankPoints] = useState(1000); // Default Bronze III
+  const [rankedWins, setRankedWins] = useState(0);
+  const [rankedTotal, setRankedTotal] = useState(0);
   const [diamonds, setDiamonds] = useState(200);
   const [inventory, setInventory] = useState<Record<PowerUpType, number>>({
     shield: 5,
@@ -491,9 +513,12 @@ function GameContent() {
     dash: 0
   });
   const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string, titleId?: TitleId}[]>([]);
+  const [rankLeaderboard, setRankLeaderboard] = useState<{name: string, rankPoints: number, avatarId?: string, titleId?: TitleId}[]>([]);
+  const [leaderboardTab, setLeaderboardTab] = useState<'score' | 'rank'>('score');
   const [selectedTitle, setSelectedTitle] = useState<TitleId | null>(null);
   const [unlockedTitles, setUnlockedTitles] = useState<TitleId[]>(['rookie']);
   const [showHonorModal, setShowHonorModal] = useState(false);
+  const [showRankedModal, setShowRankedModal] = useState(false);
 
   const [achievements, setAchievements] = useState<string[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd', 'hgte']);
@@ -700,6 +725,9 @@ function GameContent() {
             if (userDoc.exists()) {
               const data = userDoc.data();
               setHighScore(data.highScore || 0);
+              setRankPoints(data.rankPoints || 1000);
+              setRankedWins(data.rankedWins || 0);
+              setRankedTotal(data.rankedTotal || 0);
               setDiamonds(data.diamonds || 0);
               const loadedInventory = data.inventory || { shield: 5, magnet: 5, doubleScore: 5, dash: 5 };
               setInventory(loadedInventory);
@@ -722,6 +750,9 @@ function GameContent() {
                 name: u.displayName || '匿名玩家',
                 email: u.email || '',
                 highScore: 0,
+                rankPoints: 1000,
+                rankedWins: 0,
+                rankedTotal: 0,
                 totalGames: 0,
                 diamonds: 200,
                 inventory: { shield: 5, magnet: 5, doubleScore: 5, dash: 5 },
@@ -830,8 +861,10 @@ function GameContent() {
   // --- Leaderboard Real-time Sync ---
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'leaderboard'), orderBy('score', 'desc'), limit(10));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    
+    // Score Leaderboard
+    const scoreQuery = query(collection(db, 'leaderboard'), orderBy('score', 'desc'), limit(10));
+    const unsubscribeScore = onSnapshot(scoreQuery, (snapshot) => {
       const entries = snapshot.docs.map(doc => ({
         name: doc.data().name,
         score: doc.data().score,
@@ -842,7 +875,25 @@ function GameContent() {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'leaderboard');
     });
-    return () => unsubscribe();
+
+    // Rank Leaderboard
+    const rankQuery = query(collection(db, 'users'), orderBy('rankPoints', 'desc'), limit(10));
+    const unsubscribeRank = onSnapshot(rankQuery, (snapshot) => {
+      const entries = snapshot.docs.map(doc => ({
+        name: doc.data().name || '匿名玩家',
+        rankPoints: doc.data().rankPoints || 1000,
+        avatarId: doc.data().avatarId,
+        titleId: doc.data().titleId
+      }));
+      setRankLeaderboard(entries);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    return () => {
+      unsubscribeScore();
+      unsubscribeRank();
+    };
   }, [user]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -1566,6 +1617,59 @@ function GameContent() {
     }
   }, [isMultiplayer, matchId, user]);
 
+  const updateRankPoints = useCallback(async (result: 'win' | 'lose' | 'draw') => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      if (!userDoc.exists()) return;
+      
+      const data = userDoc.data();
+      let currentRP = data.rankPoints || 1000;
+      let wins = data.rankedWins || 0;
+      let total = data.rankedTotal || 0;
+      let currentDiamonds = data.diamonds || 0;
+      let lastWinDate = data.lastRankedWinDate || '';
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      let rpChange = 0;
+      let diamondReward = 0;
+      let toastMsg = '';
+
+      if (result === 'win') {
+        rpChange = 25;
+        wins += 1;
+        if (lastWinDate !== today) {
+          diamondReward = 50;
+          lastWinDate = today;
+          toastMsg = '首胜奖励：+50 钻石！';
+        }
+      } else if (result === 'lose') {
+        rpChange = -15;
+      }
+      
+      total += 1;
+      currentRP = Math.max(0, currentRP + rpChange);
+      currentDiamonds += diamondReward;
+      
+      await setDoc(userRef, {
+        rankPoints: currentRP,
+        rankedWins: wins,
+        rankedTotal: total,
+        diamonds: currentDiamonds,
+        lastRankedWinDate: lastWinDate
+      }, { merge: true });
+
+      if (toastMsg) {
+        setToastMessage(toastMsg);
+        setTimeout(() => setToastMessage(''), 3000);
+      }
+    } catch (e) {
+      console.error("Failed to update rank points", e);
+    }
+  }, [user]);
+
   const updateLeaderboard = useCallback(async (finalScore: number) => {
     if (!user) {
       // Local fallback
@@ -1745,10 +1849,13 @@ function GameContent() {
           matchStateRef.current = 'finished';
           if (data.winner === user.uid) {
             setMatchResult('win');
+            updateRankPoints('win');
           } else if (data.winner === 'draw') {
             setMatchResult('draw');
+            updateRankPoints('draw');
           } else {
             setMatchResult('lose');
+            updateRankPoints('lose');
           }
         }
       } else {
@@ -1772,7 +1879,7 @@ function GameContent() {
     });
     
     return () => unsubscribe();
-  }, [matchId, user, startGame]);
+  }, [matchId, user, startGame, updateRankPoints]);
 
   // --- Matchmaking Timeout & Polling ---
   useEffect(() => {
@@ -3611,6 +3718,94 @@ function GameContent() {
           )}
         </AnimatePresence>
 
+        {/* Ranked Modal */}
+        {showRankedModal && (
+          <div className="absolute inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-[#fff8e1] w-full max-w-[300px] rounded-3xl p-4 border-4 border-[#0288d1] shadow-[0_8px_0_#01579b,0_10px_15px_rgba(0,0,0,0.3)] flex flex-col items-center relative"
+            >
+              <button 
+                onClick={() => setShowRankedModal(false)} 
+                className="absolute -top-2 -right-2 text-[#0288d1] hover:scale-110 transition-transform bg-white rounded-full p-1 border-2 border-[#0288d1] shadow-md z-10"
+              >
+                <X size={20} strokeWidth={3} />
+              </button>
+
+              <div className="w-full text-center mb-3">
+                <h2 className="text-2xl font-black text-[#0288d1] tracking-wider" style={{ textShadow: '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff' }}>排位赛</h2>
+                <p className="text-[#01579b] text-xs font-bold mt-0.5">与全服玩家一较高下！</p>
+              </div>
+
+              {(() => {
+                const rankInfo = getRankInfo(rankPoints);
+                const nextRank = RANK_SYSTEM.find(r => r.minRP > rankPoints);
+                const progress = nextRank ? ((rankPoints - rankInfo.minRP) / (nextRank.minRP - rankInfo.minRP)) * 100 : 100;
+                
+                return (
+                  <div className="w-full flex flex-col items-center gap-2">
+                    <div className="relative w-24 h-24 flex items-center justify-center bg-white rounded-full border-4 shadow-inner" style={{ borderColor: rankInfo.color }}>
+                      <span className="text-4xl drop-shadow-md">{rankInfo.icon}</span>
+                      <div className="absolute -bottom-2 bg-white px-3 py-0.5 rounded-full border-2 font-black text-[10px] shadow-md" style={{ borderColor: rankInfo.color, color: rankInfo.color }}>
+                        {rankInfo.name}
+                      </div>
+                    </div>
+
+                    <div className="w-full mt-2 bg-white/50 p-3 rounded-2xl border-2 border-[#0288d1]/20">
+                      <div className="flex justify-between items-end mb-1">
+                        <span className="text-[#01579b] font-black text-sm">{rankPoints} RP</span>
+                        {nextRank ? (
+                          <span className="text-[10px] font-bold text-gray-500">距离 {nextRank.name} 还需 {nextRank.minRP - rankPoints} RP</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-gray-500">已达最高段位</span>
+                        )}
+                      </div>
+                      <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300 shadow-inner">
+                        <div 
+                          className="h-full rounded-full transition-all duration-1000 ease-out"
+                          style={{ width: `${progress}%`, backgroundColor: rankInfo.color, boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.2)' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="w-full grid grid-cols-2 gap-2">
+                      <div className="bg-white/60 p-2 rounded-xl border border-[#0288d1]/20 flex flex-col items-center">
+                        <span className="text-[10px] text-gray-500 font-bold">总场次</span>
+                        <span className="text-sm font-black text-[#0288d1]">{rankedTotal}</span>
+                      </div>
+                      <div className="bg-white/60 p-2 rounded-xl border border-[#0288d1]/20 flex flex-col items-center">
+                        <span className="text-[10px] text-gray-500 font-bold">胜率</span>
+                        <span className="text-sm font-black text-[#0288d1]">{rankedTotal > 0 ? Math.round((rankedWins / rankedTotal) * 100) : 0}%</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-blue-50 p-2 rounded-xl border border-blue-200 text-[10px] text-blue-800 font-bold">
+                      <p>🏆 奖励说明：</p>
+                      <ul className="list-disc pl-3 mt-0.5 space-y-0.5">
+                        <li>每日首胜 <span className="text-blue-600">50 钻石</span></li>
+                        <li>赛季结算专属称号</li>
+                        <li>胜利加分，失败扣分</li>
+                      </ul>
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setShowRankedModal(false);
+                        startMatchmaking();
+                      }}
+                      className="w-full mt-1 py-3 rounded-2xl font-black text-lg text-white border-4 border-white shadow-[0_4px_0_#0277bd,0_5px_10px_rgba(0,0,0,0.3)] transition-transform active:translate-y-1 active:shadow-[0_0px_0_#0277bd]"
+                      style={{ background: 'linear-gradient(to bottom, #4fc3f7, #0288d1)', textShadow: '1px 1px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
+                    >
+                      开始匹配
+                    </button>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
+
         {/* Honor Modal */}
         {showHonorModal && (
           <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -3980,12 +4175,12 @@ function GameContent() {
           
           {gameState === 'start' && (
             <motion.button 
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowHonorModal(true)}
-              className="w-10 h-10 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full flex items-center justify-center border border-white/20 shadow-lg"
+              className="w-10 h-10 bg-[#ffb300] rounded-full flex items-center justify-center border-4 border-white shadow-[0_4px_0_#b7791f,0_6px_10px_rgba(0,0,0,0.3)] transition-transform"
             >
-              <Trophy className="text-white" size={20} />
+              <Trophy className="text-white" size={20} strokeWidth={3} />
             </motion.button>
           )}
         </div>
@@ -4366,11 +4561,11 @@ function GameContent() {
                     无尽<br/><span className="text-2xl">模式</span>
                   </button>
                   <button 
-                    onClick={() => startMatchmaking()}
+                    onClick={() => setShowRankedModal(true)}
                     className="flex-1 py-3 rounded-3xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#0277bd,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#0277bd] leading-tight"
                     style={{ background: 'linear-gradient(to bottom, #e1f5fe, #29b6f6, #0288d1)', textShadow: '2px 2px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
                   >
-                    竞技<br/><span className="text-2xl">对战</span>
+                    排位<br/><span className="text-2xl">模式</span>
                   </button>
                 </div>
               </div>
@@ -4780,18 +4975,33 @@ function GameContent() {
           {gameState === 'leaderboard' && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30 px-6">
               <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center">
-                <div className="w-full flex justify-between items-center mb-6">
+                <div className="w-full flex justify-between items-center mb-4">
                   <h2 className="text-3xl font-black text-[#e65100]">排行榜</h2>
                   <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">X</button>
                 </div>
                 
+                <div className="w-full flex gap-2 mb-4 bg-orange-100 p-1 rounded-xl border-2 border-orange-200">
+                  <button 
+                    onClick={() => setLeaderboardTab('score')}
+                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'score' ? 'bg-white text-orange-600 shadow-sm border border-orange-200' : 'text-orange-400 hover:bg-orange-50'}`}
+                  >
+                    分数排行
+                  </button>
+                  <button 
+                    onClick={() => setLeaderboardTab('rank')}
+                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'rank' ? 'bg-white text-blue-600 shadow-sm border border-blue-200' : 'text-orange-400 hover:bg-orange-50'}`}
+                  >
+                    段位排行
+                  </button>
+                </div>
+
                 <div className="w-full space-y-3 mb-6 max-h-[400px] overflow-y-auto pr-1">
-                  {leaderboard.length > 0 ? leaderboard.map((entry, i) => (
+                  {(leaderboardTab === 'score' ? leaderboard : rankLeaderboard).length > 0 ? (leaderboardTab === 'score' ? leaderboard : rankLeaderboard).map((entry, i) => (
                     <motion.div 
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.05 }}
-                      key={i} 
+                      key={`${leaderboardTab}-${i}`} 
                       className={`flex justify-between items-center p-3 rounded-2xl border-2 shadow-sm relative overflow-hidden ${
                         i === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400 scale-[1.05] z-10 my-2' : 
                         i === 1 ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300' : 
@@ -4850,12 +5060,30 @@ function GameContent() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className={`font-mono font-black text-lg leading-none ${
-                          i === 0 ? 'text-yellow-700 text-xl' : 
-                          i === 1 ? 'text-gray-600' : 
-                          i === 2 ? 'text-orange-700' : 'text-yellow-600'
-                        }`}>{entry.score}</span>
-                        <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
+                        {leaderboardTab === 'score' ? (
+                          <>
+                            <span className={`font-mono font-black text-lg leading-none ${
+                              i === 0 ? 'text-yellow-700 text-xl' : 
+                              i === 1 ? 'text-gray-600' : 
+                              i === 2 ? 'text-orange-700' : 'text-yellow-600'
+                            }`}>{'score' in entry ? entry.score : 0}</span>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <span className="text-lg drop-shadow-sm">{getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).icon}</span>
+                              <span className={`font-mono font-black text-lg leading-none ${
+                                i === 0 ? 'text-blue-700 text-xl' : 
+                                i === 1 ? 'text-gray-600' : 
+                                i === 2 ? 'text-orange-700' : 'text-blue-600'
+                              }`}>{'rankPoints' in entry ? entry.rankPoints : 1000}</span>
+                            </div>
+                            <span className="text-[10px] font-bold" style={{ color: getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).color }}>
+                              {getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).name}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </motion.div>
                   )) : (

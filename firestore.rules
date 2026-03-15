@@ -82,7 +82,7 @@ service cloud.firestore {
 
     function isValidUserStats(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -96,7 +96,11 @@ service cloud.firestore {
              (!('friends' in data) || isValidList('friends', 1000)) &&
              (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
-             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20));
+             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
+             (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
+             (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
+             (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&
+             (!('lastRankedWinDate' in data) || validStringLength('lastRankedWinDate', 0, 20));
     }
 
     function isValidCheckIn(data) {
