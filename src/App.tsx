@@ -486,21 +486,36 @@ function GameContent() {
     const newTitles = [...unlockedTitles];
     let changed = false;
 
-    if (highScore >= 5000 && !newTitles.includes('expert')) {
+    if (highScore >= 1000 && !newTitles.includes('expert')) {
       newTitles.push('expert');
       changed = true;
     }
-    if (highScore >= 12000 && !newTitles.includes('void_walker')) {
+    if (highScore >= 5000 && !newTitles.includes('void_walker')) {
       newTitles.push('void_walker');
       changed = true;
     }
-    if (highScore >= 22000 && !newTitles.includes('neon_dreamer')) {
+    if (highScore >= 9000 && !newTitles.includes('neon_dreamer')) {
       newTitles.push('neon_dreamer');
       changed = true;
     }
+    if (highScore >= 13000 && !newTitles.includes('speed_demon')) {
+      newTitles.push('speed_demon');
+      changed = true;
+    }
+    if (diamonds >= 50000 && !newTitles.includes('diamond_king')) {
+      newTitles.push('diamond_king');
+      changed = true;
+    }
     if (leaderboard.length > 0 && leaderboard[0].name === (user.displayName || '匿名玩家') && !newTitles.includes('king')) {
-      // This is a bit loose but works for demo
       newTitles.push('king');
+      changed = true;
+    }
+    if (highScore >= 30000 && !newTitles.includes('hdd_shadow')) {
+      newTitles.push('hdd_shadow');
+      changed = true;
+    }
+    if (highScore >= 50000 && !newTitles.includes('god_mode')) {
+      newTitles.push('god_mode');
       changed = true;
     }
 
@@ -508,7 +523,7 @@ function GameContent() {
       setUnlockedTitles(newTitles);
       setDoc(doc(db, 'users', user.uid), { unlockedTitles: newTitles }, { merge: true });
     }
-  }, [highScore, leaderboard, user]);
+  }, [highScore, leaderboard, user, diamonds]);
 
   const selectTitle = async (titleId: TitleId | null) => {
     if (!user) return;
@@ -540,7 +555,7 @@ function GameContent() {
   const [matchState, setMatchState] = useState<'none' | 'matching' | 'vs' | 'playing' | 'finished'>('none');
   const [matchmakingStatus, setMatchmakingStatus] = useState<string>('正在连接服务器...');
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [opponent, setOpponent] = useState<{ name: string, score: number, status: string, character?: string } | null>(null);
+  const [opponent, setOpponent] = useState<{ name: string, score: number, status: string, character?: string, title?: string } | null>(null);
   const [matchResult, setMatchResult] = useState<'win' | 'lose' | 'draw' | null>(null);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [matchMessage, setMatchMessage] = useState('');
@@ -636,7 +651,7 @@ function GameContent() {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [friends, setFriends] = useState<string[]>([]);
   const [allUsers, setAllUsers] = useState<{uid: string, name: string, avatarId: string}[]>([]);
-  const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string}[]>([]);
+  const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string, title?: string}[]>([]);
   const [pendingInvitation, setPendingInvitation] = useState<any>(null);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [isHost, setIsHost] = useState(false);
@@ -984,7 +999,12 @@ function GameContent() {
         const usersList: any[] = [];
         querySnapshot.forEach((doc) => {
           if (doc.id !== user.uid) {
-            usersList.push({ uid: doc.id, name: doc.data().name, avatarId: doc.data().avatarId });
+            usersList.push({ 
+              uid: doc.id, 
+              name: doc.data().name, 
+              avatarId: doc.data().avatarId,
+              title: doc.data().selectedTitle
+            });
           }
         });
         setAllUsers(usersList);
@@ -3637,11 +3657,15 @@ function GameContent() {
                         {!isUnlocked && (
                           <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
                             解锁条件：{
-                              titleId === 'expert' ? '历史最高分达到 5000' :
-                              titleId === 'void_walker' ? '历史最高分达到 12000' :
-                              titleId === 'neon_dreamer' ? '历史最高分达到 22000' :
-                              titleId === 'king' ? '获得排行榜第一名' :
-                              titleId === 'hdd_shadow' ? '解锁隐藏成就' : '初始赠送'
+                              titleId === 'rookie' ? '初始赠送' :
+                              titleId === 'expert' ? '历史最高分达到 1,000' :
+                              titleId === 'void_walker' ? '历史最高分达到 5,000' :
+                              titleId === 'neon_dreamer' ? '历史最高分达到 9,000' :
+                              titleId === 'speed_demon' ? '历史最高分达到 13,000' :
+                              titleId === 'diamond_king' ? '钻石数量达到 50,000' :
+                              titleId === 'king' ? '获得排行榜第 1 名' :
+                              titleId === 'hdd_shadow' ? '历史最高分达到 30,000' :
+                              titleId === 'god_mode' ? '历史最高分达到 50,000' : '初始赠送'
                             }
                           </div>
                         )}
@@ -3832,7 +3856,14 @@ function GameContent() {
                                 <Users size={20} className="text-[#4CAF50]" />
                               )}
                             </div>
-                            <span className="font-bold text-[#A65D2C]">{friend.name}</span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-[#A65D2C]">{friend.name}</span>
+                              {friend.title && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: TITLES[friend.title as any]?.color, backgroundColor: `${TITLES[friend.title as any]?.color}20` }}>
+                                  {TITLES[friend.title as any]?.name}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <button 
@@ -4505,6 +4536,11 @@ function GameContent() {
                   <span className="text-2xl font-black text-white bg-blue-600 px-4 py-1 rounded-full shadow-lg">
                     {user?.displayName || '你'}
                   </span>
+                  {selectedTitle && (
+                    <span className="mt-1 text-xs font-bold text-blue-200" style={{ color: TITLES[selectedTitle]?.color }}>
+                      {TITLES[selectedTitle]?.name}
+                    </span>
+                  )}
                 </div>
 
                 {/* VS Text */}
@@ -4526,6 +4562,12 @@ function GameContent() {
                   <span className="text-2xl font-black text-white bg-red-600 px-4 py-1 rounded-full shadow-lg">
                     {opponent?.name || '对手'}
                   </span>
+                  {/* @ts-ignore */}
+                  {opponent?.title && (
+                    <span className="mt-1 text-xs font-bold text-red-200" style={{ color: TITLES[opponent.title as any]?.color }}>
+                      {TITLES[opponent.title as any]?.name}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
