@@ -8,7 +8,9 @@
         "userId": { "type": "string", "description": "The unique ID of the user" },
         "name": { "type": "string", "description": "The display name of the user" },
         "score": { "type": "integer", "description": "The high score achieved" },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the score was achieved" }
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the score was achieved" },
+        "avatarId": { "type": "string", "description": "The ID of the character avatar" },
+        "titleId": { "type": "string", "description": "The ID of the equipped title" }
       },
       "required": ["userId", "name", "score", "timestamp"]
     },
@@ -34,7 +36,9 @@
           }
         },
         "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievements" },
-        "unlockedCharacters": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked character IDs" }
+        "unlockedCharacters": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked character IDs" },
+        "selectedTitle": { "type": "string", "description": "The ID of the currently selected title" },
+        "unlockedTitles": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked title IDs" }
       },
       "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory", "unlockedCharacters"]
     },

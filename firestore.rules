@@ -71,17 +71,18 @@ service cloud.firestore {
     
     function isValidLeaderboardEntry(data) {
       return hasRequiredFields(['userId', 'name', 'score', 'timestamp']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId', 'titleId']) &&
              validStringLength('userId', 1, 100) &&
              validStringLength('name', 1, 50) &&
              isPositiveNumber('score') &&
              (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
+             (!('titleId' in data) || validStringLength('titleId', 1, 50)) &&
              data.timestamp is timestamp;
     }
 
     function isValidUserStats(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -93,7 +94,9 @@ service cloud.firestore {
              (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
              (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
              (!('friends' in data) || isValidList('friends', 1000)) &&
-             (!('hgteFragments' in data) || isPositiveNumber('hgteFragments'));
+             (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
+             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
+             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20));
     }
 
     function isValidCheckIn(data) {
