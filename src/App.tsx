@@ -698,12 +698,19 @@ function GameContent() {
   // Friends & Custom Rooms state
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [friends, setFriends] = useState<string[]>([]);
+  const [rankChange, setRankChange] = useState<{from: any, to: any, type: 'up' | 'down'} | null>(null);
+
+  const isModalOpen = showHonorModal || showRankedModal || showAvatarSelect || showCharSelect || 
+                      showCheckInModal || showGachaResultModal || showInventoryModal || 
+                      showFriendsModal || showAuthModal || rankChange !== null ||
+                      ['leaderboard', 'shop', 'gacha', 'instructions'].includes(gameState);
+
   const [allUsers, setAllUsers] = useState<{uid: string, name: string, avatarId: string}[]>([]);
   const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string, title?: string}[]>([]);
   const [pendingInvitation, setPendingInvitation] = useState<any>(null);
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [isHost, setIsHost] = useState(false);
-  const [matchType, setMatchType] = useState<'random' | 'private'>('random');
+  const [matchType, setMatchType] = useState<'random' | 'private' | 'ranked'>('random');
 
   // --- Firebase Auth & Sync ---
   useEffect(() => {
@@ -1436,7 +1443,7 @@ function GameContent() {
     }
     
     // Reset state
-    setMatchType('random');
+    if (matchType !== 'ranked') setMatchType('random');
     setMatchState('matching');
     matchStateRef.current = 'matching';
     setMatchmakingStatus('正在连接服务器...');
@@ -1618,48 +1625,70 @@ function GameContent() {
   }, [isMultiplayer, matchId, user]);
 
   const updateRankPoints = useCallback(async (result: 'win' | 'lose' | 'draw') => {
-    if (!user) return;
+    if (!user || matchType !== 'ranked') return;
     try {
       const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
-      if (!userDoc.exists()) return;
       
-      const data = userDoc.data();
-      let currentRP = data.rankPoints || 1000;
-      let wins = data.rankedWins || 0;
-      let total = data.rankedTotal || 0;
-      let currentDiamonds = data.diamonds || 0;
-      let lastWinDate = data.lastRankedWinDate || '';
-      
-      const today = new Date().toISOString().split('T')[0];
-      
-      let rpChange = 0;
-      let diamondReward = 0;
       let toastMsg = '';
+      let rankUpOrDown: {from: any, to: any, type: 'up' | 'down'} | null = null;
 
-      if (result === 'win') {
-        rpChange = 25;
-        wins += 1;
-        if (lastWinDate !== today) {
-          diamondReward = 50;
-          lastWinDate = today;
-          toastMsg = '首胜奖励：+50 钻石！';
+      await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) return;
+        
+        const data = userDoc.data();
+        let currentRP = data.rankPoints || 1000;
+        let wins = data.rankedWins || 0;
+        let total = data.rankedTotal || 0;
+        let currentDiamonds = data.diamonds || 0;
+        let lastWinDate = data.lastRankedWinDate || '';
+        
+        const oldRank = getRankInfo(currentRP);
+        const today = new Date().toISOString().split('T')[0];
+        
+        let rpChange = 0;
+        let diamondReward = 0;
+
+        if (result === 'win') {
+          rpChange = 25;
+          wins += 1;
+          if (lastWinDate !== today) {
+            diamondReward = 50;
+            lastWinDate = today;
+            toastMsg = '首胜奖励：+50 钻石！';
+          }
+        } else if (result === 'lose') {
+          rpChange = -15;
         }
-      } else if (result === 'lose') {
-        rpChange = -15;
+        
+        total += 1;
+        const newRP = Math.max(0, currentRP + rpChange);
+        currentRP = newRP;
+        currentDiamonds += diamondReward;
+        
+        const newRank = getRankInfo(currentRP);
+        if (newRank.name !== oldRank.name) {
+          rankUpOrDown = {
+            from: oldRank,
+            to: newRank,
+            type: currentRP > (data.rankPoints || 1000) ? 'up' : 'down'
+          };
+        }
+
+        transaction.update(userRef, {
+          rankPoints: currentRP,
+          rankedWins: wins,
+          rankedTotal: total,
+          diamonds: currentDiamonds,
+          lastRankedWinDate: lastWinDate
+        });
+      });
+
+      if (rankUpOrDown) {
+        setRankChange(rankUpOrDown);
+        // Auto hide after 4 seconds
+        setTimeout(() => setRankChange(null), 4000);
       }
-      
-      total += 1;
-      currentRP = Math.max(0, currentRP + rpChange);
-      currentDiamonds += diamondReward;
-      
-      await setDoc(userRef, {
-        rankPoints: currentRP,
-        rankedWins: wins,
-        rankedTotal: total,
-        diamonds: currentDiamonds,
-        lastRankedWinDate: lastWinDate
-      }, { merge: true });
 
       if (toastMsg) {
         setToastMessage(toastMsg);
@@ -3792,6 +3821,7 @@ function GameContent() {
                     <button 
                       onClick={() => {
                         setShowRankedModal(false);
+                        setMatchType('ranked');
                         startMatchmaking();
                       }}
                       className="w-full mt-1 py-3 rounded-2xl font-black text-lg text-white border-4 border-white shadow-[0_4px_0_#0277bd,0_5px_10px_rgba(0,0,0,0.3)] transition-transform active:translate-y-1 active:shadow-[0_0px_0_#0277bd]"
@@ -4161,29 +4191,73 @@ function GameContent() {
           </div>
         )}
 
-        {/* Top Right Controls */}
-        <div className="absolute top-4 right-4 z-[70] flex flex-col gap-3 items-center">
-          <button 
-            onClick={() => {
-              const muted = toggleMute();
-              setIsMutedState(muted);
-            }}
-            className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center border border-white/20 hover:bg-black/70 transition-colors shadow-lg"
-          >
-            {isMutedState ? <VolumeX className="text-white" size={20} /> : <Volume2 className="text-white" size={20} />}
-          </button>
-          
-          {gameState === 'start' && (
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowHonorModal(true)}
-              className="w-10 h-10 bg-[#ffb300] rounded-full flex items-center justify-center border-4 border-white shadow-[0_4px_0_#b7791f,0_6px_10px_rgba(0,0,0,0.3)] transition-transform"
+        {/* Rank Change Animation */}
+        <AnimatePresence>
+          {rankChange && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5, y: 50 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.5, y: -50 }}
+              className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
             >
-              <Trophy className="text-white" size={20} strokeWidth={3} />
-            </motion.button>
+              <div className="bg-black/60 backdrop-blur-md p-8 rounded-3xl border-4 border-white shadow-2xl flex flex-col items-center gap-4">
+                <motion.div
+                  initial={{ rotate: -10 }}
+                  animate={{ rotate: 10 }}
+                  transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.5 }}
+                  className="text-8xl"
+                >
+                  {rankChange.type === 'up' ? '🎊' : '📉'}
+                </motion.div>
+                <h2 className={`text-4xl font-black ${rankChange.type === 'up' ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {rankChange.type === 'up' ? '段位升级！' : '段位下降'}
+                </h2>
+                <div className="flex items-center gap-6 mt-4">
+                  <div className="flex flex-col items-center gap-2 opacity-60">
+                    <span className="text-4xl">{rankChange.from.icon}</span>
+                    <span className="text-white font-bold">{rankChange.from.name}</span>
+                  </div>
+                  <ChevronRight className="text-white" size={32} />
+                  <motion.div 
+                    initial={{ scale: 1 }}
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <span className="text-6xl drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">{rankChange.to.icon}</span>
+                    <span className="text-white text-2xl font-black" style={{ color: rankChange.to.color }}>{rankChange.to.name}</span>
+                  </motion.div>
+                </div>
+              </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+
+        {/* Top Right Controls */}
+        {!isModalOpen && (
+          <div className="absolute top-4 right-4 z-[70] flex flex-col gap-3 items-center">
+            <button 
+              onClick={() => {
+                const muted = toggleMute();
+                setIsMutedState(muted);
+              }}
+              className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center border border-white/20 hover:bg-black/70 transition-colors shadow-lg"
+            >
+              {isMutedState ? <VolumeX className="text-white" size={20} /> : <Volume2 className="text-white" size={20} />}
+            </button>
+            
+            {gameState === 'start' && (
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowHonorModal(true)}
+                className="w-10 h-10 bg-[#ffb300] rounded-full flex items-center justify-center border-4 border-white shadow-[0_4px_0_#b7791f,0_6px_10px_rgba(0,0,0,0.3)] transition-transform"
+              >
+                <Trophy className="text-white" size={20} strokeWidth={3} />
+              </motion.button>
+            )}
+          </div>
+        )}
 
         {/* Pause Button (Playing) */}
         {gameState === 'playing' && (
@@ -4953,6 +5027,20 @@ function GameContent() {
                     <span className="text-3xl font-mono text-yellow-400">{opponent?.score || 0}</span>
                   </div>
                 </div>
+
+                {matchType === 'ranked' && (
+                  <div className="flex flex-col items-center mb-6 relative z-10 bg-white/10 p-4 rounded-2xl border border-white/20 w-full">
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-bold">排位积分:</span>
+                      <span className={`text-3xl font-black ${matchResult === 'win' ? 'text-green-400' : matchResult === 'lose' ? 'text-red-400' : 'text-yellow-400'}`}>
+                        {matchResult === 'win' ? '+25' : matchResult === 'lose' ? '-15' : '+0'}
+                      </span>
+                    </div>
+                    <div className="text-white/60 text-sm mt-1 font-mono">
+                      当前积分: {(user as any)?.rankPoints || 1000}
+                    </div>
+                  </div>
+                )}
                 
                 <button 
                   onClick={() => {
