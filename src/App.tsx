@@ -581,6 +581,7 @@ function GameContent() {
   const [matchResult, setMatchResult] = useState<'win' | 'lose' | 'draw' | null>(null);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [matchMessage, setMatchMessage] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
   
   const envRef = useRef({
     biomeIndex: 0,
@@ -4163,6 +4164,12 @@ function GameContent() {
             onClick={jump}
           />
 
+          {toastMessage && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-black/80 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg border border-white/20 animate-bounce">
+              {toastMessage}
+            </div>
+          )}
+
           {gameState === 'start' && (
             <div className="absolute inset-0 flex flex-col items-center justify-between pb-8 pt-6 px-4 bg-gradient-to-b from-blue-900/90 to-emerald-900/90 backdrop-blur-sm">
               {/* Top Bar */}
@@ -4196,12 +4203,36 @@ function GameContent() {
                         </span>
                       )}
                       {user && (
-                        <button 
-                          onClick={logout}
-                          className="text-[10px] text-red-400 font-bold mt-0.5 hover:text-red-300"
-                        >
-                          退出登录
-                        </button>
+                        <div className="flex gap-2 mt-0.5">
+                          <button 
+                            onClick={logout}
+                            className="text-[10px] text-red-400 font-bold hover:text-red-300"
+                          >
+                            退出登录
+                          </button>
+                          {(user.displayName === 'hdd' || user.email === 'butanyueye@gmail.com') && (
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const matchesRef = collection(db, 'matches');
+                                  const q = query(matchesRef);
+                                  const snapshot = await getDocs(q);
+                                  const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                                  await Promise.all(deletePromises);
+                                  setToastMessage('匹配记录已清空');
+                                  setTimeout(() => setToastMessage(''), 3000);
+                                } catch (e) {
+                                  console.error(e);
+                                  setToastMessage('清空失败');
+                                  setTimeout(() => setToastMessage(''), 3000);
+                                }
+                              }}
+                              className="text-[10px] text-orange-400 font-bold hover:text-orange-300"
+                            >
+                              清空匹配
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
