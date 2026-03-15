@@ -750,6 +750,15 @@ function GameContent() {
               setHgteFragments(data.hgteFragments || 0);
               setSelectedTitle(data.selectedTitle || null);
               setUnlockedTitles(data.unlockedTitles || ['rookie']);
+
+              // Migration for existing users
+              if (!('rankPoints' in data)) {
+                updateDoc(doc(db, 'users', u.uid), {
+                  rankPoints: 1000,
+                  rankedWins: 0,
+                  rankedTotal: 0
+                }).catch(err => console.error("Migration error:", err));
+              }
             } else {
               // Initialize user doc
               const initialData = {
@@ -886,12 +895,18 @@ function GameContent() {
     // Rank Leaderboard
     const rankQuery = query(collection(db, 'users'), orderBy('rankPoints', 'desc'), limit(10));
     const unsubscribeRank = onSnapshot(rankQuery, (snapshot) => {
-      const entries = snapshot.docs.map(doc => ({
-        name: doc.data().name || '匿名玩家',
-        rankPoints: doc.data().rankPoints || 1000,
-        avatarId: doc.data().avatarId,
-        titleId: doc.data().titleId
-      }));
+      const entries = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          name: data.name || '匿名玩家',
+          rankPoints: typeof data.rankPoints === 'number' ? data.rankPoints : 1000,
+          rankedWins: data.rankedWins || 0,
+          rankedTotal: data.rankedTotal || 0,
+          avatarId: data.avatarId,
+          titleId: data.titleId
+        };
+      });
+      console.log("Rank Leaderboard updated:", entries.length, "entries");
       setRankLeaderboard(entries);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'users');
@@ -5060,138 +5075,167 @@ function GameContent() {
           )}
 
           {/* Leaderboard Modal */}
-          {gameState === 'leaderboard' && (
-            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30 px-6">
-              <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center">
-                <div className="w-full flex justify-between items-center mb-4">
-                  <h2 className="text-3xl font-black text-[#e65100]">排行榜</h2>
-                  <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">X</button>
-                </div>
-                
-                <div className="w-full flex gap-2 mb-4 bg-orange-100 p-1 rounded-xl border-2 border-orange-200">
-                  <button 
-                    onClick={() => setLeaderboardTab('score')}
-                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'score' ? 'bg-white text-orange-600 shadow-sm border border-orange-200' : 'text-orange-400 hover:bg-orange-50'}`}
-                  >
-                    分数排行
-                  </button>
-                  <button 
-                    onClick={() => setLeaderboardTab('rank')}
-                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'rank' ? 'bg-white text-blue-600 shadow-sm border border-blue-200' : 'text-orange-400 hover:bg-orange-50'}`}
-                  >
-                    段位排行
-                  </button>
-                </div>
-
-                <div className="w-full space-y-3 mb-6 max-h-[400px] overflow-y-auto pr-1">
-                  {(leaderboardTab === 'score' ? leaderboard : rankLeaderboard).length > 0 ? (leaderboardTab === 'score' ? leaderboard : rankLeaderboard).map((entry, i) => (
-                    <motion.div 
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      key={`${leaderboardTab}-${i}`} 
-                      className={`flex justify-between items-center p-3 rounded-2xl border-2 shadow-sm relative overflow-hidden ${
-                        i === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400 scale-[1.05] z-10 my-2' : 
-                        i === 1 ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300' : 
-                        i === 2 ? 'bg-gradient-to-r from-orange-50 to-orange-100 border-orange-300' : 'bg-white border-gray-100'
-                      }`}
-                    >
-                      {i === 0 && (
-                        <motion.div 
-                          animate={{ rotate: [0, 10, -10, 0] }}
-                          transition={{ repeat: Infinity, duration: 2 }}
-                          className="absolute -top-1 -right-1 text-2xl z-20"
-                        >
-                          👑
-                        </motion.div>
-                      )}
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <span className={`absolute -top-1 -left-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white z-10 shadow-md ${
-                            i === 0 ? 'bg-yellow-500' : 
-                            i === 1 ? 'bg-gray-400' : 
-                            i === 2 ? 'bg-orange-500' : 'bg-gray-400'
-                          }`}>
-                            {i + 1}
-                          </span>
-                          <div className={`w-12 h-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 shadow-inner ${
-                            i === 0 ? 'border-yellow-400 ring-4 ring-yellow-200' : 
-                            i === 1 ? 'border-gray-300 ring-4 ring-gray-100' : 
-                            i === 2 ? 'border-orange-400 ring-4 ring-orange-100' : 'border-gray-100'
-                          }`}>
-                            <img 
-                              src={getCharacterImage(entry.avatarId || 'hdd')} 
-                              alt={entry.name} 
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1">
-                            <span className={`font-black text-[#5d4037] truncate ${i === 0 ? 'text-lg' : 'text-base'} max-w-[100px]`}>{entry.name}</span>
-                            {i < 3 && <Star className={`w-3 h-3 ${i === 0 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />}
-                          </div>
-                          {entry.titleId && TITLES[entry.titleId] && (
-                            <span 
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : ''}`}
-                              style={{ 
-                                color: TITLES[entry.titleId].color, 
-                                backgroundColor: `${TITLES[entry.titleId].color}20`,
-                                textShadow: TITLES[entry.titleId].shadow,
-                                border: `1px solid ${TITLES[entry.titleId].color}40`
-                              }}
-                            >
-                              {TITLES[entry.titleId].name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        {leaderboardTab === 'score' ? (
-                          <>
-                            <span className={`font-mono font-black text-lg leading-none ${
-                              i === 0 ? 'text-yellow-700 text-xl' : 
-                              i === 1 ? 'text-gray-600' : 
-                              i === 2 ? 'text-orange-700' : 'text-yellow-600'
-                            }`}>{'score' in entry ? entry.score : 0}</span>
-                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-1">
-                              <span className="text-lg drop-shadow-sm">{getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).icon}</span>
-                              <span className={`font-mono font-black text-lg leading-none ${
-                                i === 0 ? 'text-blue-700 text-xl' : 
-                                i === 1 ? 'text-gray-600' : 
-                                i === 2 ? 'text-orange-700' : 'text-blue-600'
-                              }`}>{'rankPoints' in entry ? entry.rankPoints : 1000}</span>
-                            </div>
-                            <span className="text-[10px] font-bold" style={{ color: getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).color }}>
-                              {getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).name}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </motion.div>
-                  )) : (
-                    <div className="flex flex-col items-center justify-center py-10 opacity-40">
-                      <span className="text-4xl mb-2">🏆</span>
-                      <p className="text-gray-500 font-bold italic">暂无排名，快去挑战吧！</p>
-                    </div>
-                  )}
-                </div>
-                
-                <button 
-                  onClick={() => setGameState('start')}
-                  className="w-full py-3 rounded-2xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#43a047,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#43a047]"
-                  style={{ background: 'linear-gradient(to bottom, #a5d6a7, #66bb6a, #4caf50)', textShadow: '1px 1px 0 #2e7d32, -1px -1px 0 #2e7d32, 1px -1px 0 #2e7d32, -1px 1px 0 #2e7d32' }}
+          <AnimatePresence>
+            {gameState === 'leaderboard' && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30 px-6"
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                  className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center"
                 >
-                  返回
-                </button>
-              </div>
-            </div>
-          )}
+                  <div className="w-full flex justify-between items-center mb-4">
+                    <h2 className="text-3xl font-black text-[#e65100]">排行榜</h2>
+                    <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold hover:bg-red-600 transition-colors">X</button>
+                  </div>
+                  
+                  <div className="w-full flex gap-2 mb-4 bg-orange-100 p-1 rounded-xl border-2 border-orange-200">
+                    <button 
+                      onClick={() => setLeaderboardTab('score')}
+                      className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'score' ? 'bg-white text-orange-600 shadow-sm border border-orange-200' : 'text-orange-400 hover:bg-orange-50'}`}
+                    >
+                      分数排行
+                    </button>
+                    <button 
+                      onClick={() => setLeaderboardTab('rank')}
+                      className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${leaderboardTab === 'rank' ? 'bg-white text-blue-600 shadow-sm border border-blue-200' : 'text-orange-400 hover:bg-orange-50'}`}
+                    >
+                      段位排行
+                    </button>
+                  </div>
+
+                  <div className="w-full space-y-3 mb-6 h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-orange-300 scrollbar-track-transparent">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={leaderboardTab}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-3"
+                      >
+                        {(leaderboardTab === 'score' ? leaderboard : rankLeaderboard).length > 0 ? (leaderboardTab === 'score' ? leaderboard : rankLeaderboard).map((entry, i) => (
+                          <motion.div 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.03 }}
+                            key={`${leaderboardTab}-${entry.name}-${i}`} 
+                            className={`flex justify-between items-center p-3 rounded-2xl border-2 shadow-sm relative overflow-hidden ${
+                              i === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400 z-10' : 
+                              i === 1 ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300' : 
+                              i === 2 ? 'bg-gradient-to-r from-orange-50 to-orange-100 border-orange-300' : 'bg-white border-gray-100'
+                            }`}
+                          >
+                            {i === 0 && (
+                              <motion.div 
+                                animate={{ rotate: [0, 10, -10, 0] }}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                                className="absolute -top-1 -right-1 text-2xl z-20"
+                              >
+                                👑
+                              </motion.div>
+                            )}
+                            
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <span className={`absolute -top-1 -left-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white z-10 shadow-md ${
+                                  i === 0 ? 'bg-yellow-500' : 
+                                  i === 1 ? 'bg-gray-400' : 
+                                  i === 2 ? 'bg-orange-500' : 'bg-gray-400'
+                                }`}>
+                                  {i + 1}
+                                </span>
+                                <div className={`w-12 h-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 shadow-inner ${
+                                  i === 0 ? 'border-yellow-400 ring-4 ring-yellow-200' : 
+                                  i === 1 ? 'border-gray-300 ring-4 ring-gray-100' : 
+                                  i === 2 ? 'border-orange-400 ring-4 ring-orange-100' : 'border-gray-100'
+                                }`}>
+                                  <img 
+                                    src={getCharacterImage(entry.avatarId || 'hdd')} 
+                                    alt={entry.name} 
+                                    className="w-full h-full object-contain"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-1">
+                                  <span className={`font-black text-[#5d4037] truncate ${i === 0 ? 'text-lg' : 'text-base'} max-w-[100px]`}>{entry.name}</span>
+                                  {i < 3 && <Star className={`w-3 h-3 ${i === 0 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />}
+                                </div>
+                                {entry.titleId && TITLES[entry.titleId] && (
+                                  <span 
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : ''}`}
+                                    style={{ 
+                                      color: TITLES[entry.titleId].color, 
+                                      backgroundColor: `${TITLES[entry.titleId].color}20`,
+                                      textShadow: TITLES[entry.titleId].shadow,
+                                      border: `1px solid ${TITLES[entry.titleId].color}40`
+                                    }}
+                                  >
+                                    {TITLES[entry.titleId].name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              {leaderboardTab === 'score' ? (
+                                <>
+                                  <span className={`font-mono font-black text-lg leading-none ${
+                                    i === 0 ? 'text-yellow-700 text-xl' : 
+                                    i === 1 ? 'text-gray-600' : 
+                                    i === 2 ? 'text-orange-700' : 'text-yellow-600'
+                                  }`}>{'score' in entry ? entry.score : 0}</span>
+                                  <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-lg drop-shadow-sm">{getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).icon}</span>
+                                    <span className={`font-mono font-black text-lg leading-none ${
+                                      i === 0 ? 'text-blue-700 text-xl' : 
+                                      i === 1 ? 'text-gray-600' : 
+                                      i === 2 ? 'text-orange-700' : 'text-blue-600'
+                                    }`}>{'rankPoints' in entry ? entry.rankPoints : 1000}</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold" style={{ color: getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).color }}>
+                                    {getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).name}
+                                  </span>
+                                  {'rankedTotal' in entry && (entry as any).rankedTotal > 0 && (
+                                    <span className="text-[8px] text-gray-400 font-bold mt-0.5">
+                                      胜率: {Math.round(((entry as any).rankedWins / (entry as any).rankedTotal) * 100)}%
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </motion.div>
+                        )) : (
+                          <div className="flex flex-col items-center justify-center py-20 opacity-40">
+                            <span className="text-4xl mb-2">🏆</span>
+                            <p className="text-gray-500 font-bold italic">暂无排名，快去挑战吧！</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  <button 
+                    onClick={() => setGameState('start')}
+                    className="w-full py-4 rounded-3xl font-black text-2xl text-white border-4 border-white shadow-[0_6px_0_#e65100,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#e65100] relative z-10"
+                    style={{ background: 'linear-gradient(to bottom, #fff59d, #fbc02d, #f57f17)', textShadow: '2px 2px 0 #e65100, -1px -1px 0 #e65100, 1px -1px 0 #e65100, -1px 1px 0 #e65100' }}
+                  >
+                    返回主菜单
+                  </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Shop Modal */}
           {gameState === 'shop' && (
