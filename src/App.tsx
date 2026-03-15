@@ -1415,14 +1415,15 @@ function GameContent() {
     }
   };
 
-  const createNewMatch = async (type: 'random' | 'private' = 'random', roomId?: string) => {
+  const createNewMatch = async (type: 'random' | 'private' | 'ranked' = 'random', roomId?: string) => {
     if (!user) return;
     try {
       const newMatchRef = doc(collection(db, 'matches'));
       const matchData: any = {
         status: 'waiting',
         createdAt: serverTimestamp(),
-        roomType: type,
+        roomType: type === 'ranked' ? 'random' : type,
+        matchType: type,
         player1: {
           uid: user.uid,
           name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
@@ -1447,7 +1448,7 @@ function GameContent() {
     }
   };
 
-  const startMatchmaking = async (retryCount = 0) => {
+  const startMatchmaking = async (retryCount = 0, type?: 'random' | 'private' | 'ranked') => {
     if (!user) {
       setShowAuthModal(true);
       return;
@@ -1458,7 +1459,8 @@ function GameContent() {
     }
     
     // Reset state
-    if (matchType !== 'ranked') setMatchType('random');
+    const targetType = type || matchType;
+    setMatchType(targetType);
     setMatchState('matching');
     matchStateRef.current = 'matching';
     setMatchmakingStatus('正在连接服务器...');
@@ -1483,18 +1485,18 @@ function GameContent() {
       const q = query(
         collection(db, 'matches'), 
         where('status', '==', 'waiting'), 
+        where('matchType', '==', targetType),
         limit(10)
       );
       const querySnapshot = await getDocs(q);
       
-      const validDocs = querySnapshot.docs.filter(doc => {
-        const data = doc.data();
-        const isNotMe = data.player1?.uid !== user.uid;
-        const isRandom = data.roomType === 'random' || !data.roomType;
-        const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
-        const isRecent = Math.abs(Date.now() - createdAt) < 300000; // 5 minutes window to handle clock skew
-        return isNotMe && isRecent && isRandom;
-      });
+        const validDocs = querySnapshot.docs.filter(doc => {
+          const data = doc.data();
+          const isNotMe = data.player1?.uid !== user.uid;
+          const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+          const isRecent = Math.abs(Date.now() - createdAt) < 300000; // 5 minutes window to handle clock skew
+          return isNotMe && isRecent;
+        });
       
       if (validDocs.length > 0) {
         // Sort by newest first
@@ -1533,10 +1535,10 @@ function GameContent() {
         } catch (e) {
           console.log("Matchmaking: Transaction failed, retrying...", e);
           if (retryCount < 3) {
-            setTimeout(() => startMatchmaking(retryCount + 1), 500);
+            setTimeout(() => startMatchmaking(retryCount + 1, targetType), 500);
           } else {
             console.log("Matchmaking: Transaction failed after retries, creating new match");
-            createNewMatch();
+            createNewMatch(targetType);
           }
         }
       } else {
@@ -1549,19 +1551,18 @@ function GameContent() {
         const secondCheck = await getDocs(q);
         const stillNoMatches = secondCheck.docs.filter(doc => {
           const data = doc.data();
+          const createdAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
           return data.player1?.uid !== user.uid && 
-                 data.status === 'waiting' && 
-                 (data.roomType === 'random' || !data.roomType) &&
-                 Math.abs(Date.now() - (data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now())) < 300000;
+                 Math.abs(Date.now() - createdAt) < 300000;
         }).length === 0;
 
         if (stillNoMatches) {
           setMatchmakingStatus('正在创建房间并等待对手...');
-          createNewMatch();
+          createNewMatch(targetType);
         } else {
           console.log("Matchmaking: Match appeared during double check, retrying");
           // A match appeared! Retry the whole process once.
-          startMatchmaking(retryCount + 1);
+          startMatchmaking(retryCount + 1, targetType);
         }
       }
     } catch (e) {
@@ -1640,6 +1641,7 @@ function GameContent() {
   }, [isMultiplayer, matchId, user]);
 
   const updateRankPoints = useCallback(async (result: 'win' | 'lose' | 'draw') => {
+    console.log("updateRankPoints called", { result, matchType, user: user?.uid });
     if (!user || matchType !== 'ranked') return;
     try {
       const userRef = doc(db, 'users', user.uid);
@@ -1667,13 +1669,15 @@ function GameContent() {
         if (result === 'win') {
           rpChange = 25;
           wins += 1;
+          toastMsg = '排位胜利！积分 +25';
           if (lastWinDate !== today) {
             diamondReward = 50;
             lastWinDate = today;
-            toastMsg = '首胜奖励：+50 钻石！';
+            toastMsg += ' | 首胜奖励：+50 钻石！';
           }
         } else if (result === 'lose') {
           rpChange = -15;
+          toastMsg = '排位失败！积分 -15';
         }
         
         total += 1;
@@ -1712,7 +1716,7 @@ function GameContent() {
     } catch (e) {
       console.error("Failed to update rank points", e);
     }
-  }, [user]);
+  }, [user, matchType]);
 
   const updateLeaderboard = useCallback(async (finalScore: number) => {
     if (!user) {
@@ -1861,6 +1865,10 @@ function GameContent() {
         
         if (oppData) {
           setOpponent(oppData);
+        }
+        
+        if (data.matchType) {
+          setMatchType(data.matchType);
         }
         
         if (data.status === 'ready' && matchStateRef.current === 'matching') {
@@ -3836,8 +3844,7 @@ function GameContent() {
                     <button 
                       onClick={() => {
                         setShowRankedModal(false);
-                        setMatchType('ranked');
-                        startMatchmaking();
+                        startMatchmaking(0, 'ranked');
                       }}
                       className="w-full mt-1 py-3 rounded-2xl font-black text-lg text-white border-4 border-white shadow-[0_4px_0_#0277bd,0_5px_10px_rgba(0,0,0,0.3)] transition-transform active:translate-y-1 active:shadow-[0_0px_0_#0277bd]"
                       style={{ background: 'linear-gradient(to bottom, #4fc3f7, #0288d1)', textShadow: '1px 1px 0 #01579b, -1px -1px 0 #01579b, 1px -1px 0 #01579b, -1px 1px 0 #01579b' }}
@@ -5052,7 +5059,7 @@ function GameContent() {
                       </span>
                     </div>
                     <div className="text-white/60 text-sm mt-1 font-mono">
-                      当前积分: {(user as any)?.rankPoints || 1000}
+                      当前积分: {rankPoints}
                     </div>
                   </div>
                 )}
