@@ -3680,14 +3680,30 @@ function GameContent() {
                           <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
                             解锁条件：{
                               titleId === 'rookie' ? '初始赠送' :
-                              titleId === 'expert' ? '历史最高分达到 1,000' :
-                              titleId === 'void_walker' ? '历史最高分达到 5,000' :
-                              titleId === 'neon_dreamer' ? '历史最高分达到 9,000' :
-                              titleId === 'speed_demon' ? '历史最高分达到 13,000' :
+                              titleId === 'runner' ? '历史最高分达到 500' :
+                              titleId === 'jumper' ? '历史最高分达到 800' :
+                              titleId === 'explorer' ? '历史最高分达到 1,200' :
+                              titleId === 'expert' ? '历史最高分达到 2,000' :
+                              titleId === 'acrobat' ? '历史最高分达到 3,000' :
+                              titleId === 'survivor' ? '历史最高分达到 4,000' :
+                              titleId === 'treasure_hunter' ? '钻石数量达到 5,000' :
+                              titleId === 'wind_chaser' ? '历史最高分达到 6,000' :
+                              titleId === 'void_walker' ? '历史最高分达到 8,000' :
+                              titleId === 'neon_dreamer' ? '历史最高分达到 10,000' :
+                              titleId === 'speed_demon' ? '历史最高分达到 12,000' :
+                              titleId === 'shadow_ninja' ? '历史最高分达到 14,000' :
+                              titleId === 'star_gazer' ? '历史最高分达到 16,000' :
+                              titleId === 'time_traveler' ? '历史最高分达到 18,000' :
+                              titleId === 'dragon_rider' ? '历史最高分达到 20,000' :
                               titleId === 'diamond_king' ? '钻石数量达到 50,000' :
                               titleId === 'king' ? '获得排行榜第 1 名' :
                               titleId === 'hdd_shadow' ? '历史最高分达到 30,000' :
-                              titleId === 'god_mode' ? '历史最高分达到 50,000' : '初始赠送'
+                              titleId === 'god_mode' ? '历史最高分达到 40,000' :
+                              titleId === 'galaxy_lord' ? '历史最高分达到 50,000' :
+                              titleId === 'immortal' ? '历史最高分达到 60,000' :
+                              titleId === 'cyber_punk' ? '历史最高分达到 70,000' :
+                              titleId === 'abyss_watcher' ? '历史最高分达到 80,000' :
+                              titleId === 'creator' ? '历史最高分达到 100,000' : '未知条件'
                             }
                           </div>
                         )}
