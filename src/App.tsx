@@ -93,15 +93,38 @@ const BIOMES: Biome[] = [
 ];
 
 const TITLES = {
+  // 新手/入门级 (Common)
   'rookie': { name: '🌱 初出茅庐', color: '#81c784', rarity: 'common', shadow: 'none', effect: 'none' },
+  'runner': { name: '👟 奔跑者', color: '#aed581', rarity: 'common', shadow: 'none', effect: 'none' },
+  'jumper': { name: '🦘 弹跳健将', color: '#dce775', rarity: 'common', shadow: 'none', effect: 'none' },
+  'explorer': { name: '🧭 探索先锋', color: '#fff176', rarity: 'common', shadow: 'none', effect: 'none' },
+  
+  // 进阶/熟练级 (Rare)
   'expert': { name: '🏃 跑酷达人', color: '#64b5f6', rarity: 'rare', shadow: '0 0 5px #2196f3', effect: 'none' },
+  'acrobat': { name: '🤸 杂技大师', color: '#4fc3f7', rarity: 'rare', shadow: '0 0 5px #03a9f4', effect: 'none' },
+  'survivor': { name: '🛡️ 极限生存', color: '#4dd0e1', rarity: 'rare', shadow: '0 0 5px #00bcd4', effect: 'none' },
+  'treasure_hunter': { name: '💰 寻宝猎人', color: '#ffd54f', rarity: 'rare', shadow: '0 0 5px #ffb300', effect: 'none' },
+  'wind_chaser': { name: '🌪️ 追风少年', color: '#81d4fa', rarity: 'rare', shadow: '0 0 5px #29b6f6', effect: 'none' },
+
+  // 高手/史诗级 (Epic)
   'void_walker': { name: '🌀 虚空行者', color: '#9575cd', rarity: 'epic', shadow: '0 0 8px #673ab7', effect: 'pulse' },
   'neon_dreamer': { name: '✨ 霓虹之梦', color: '#f06292', rarity: 'epic', shadow: '0 0 10px #e91e63', effect: 'glow' },
   'speed_demon': { name: '⚡ 极速狂魔', color: '#ff5722', rarity: 'epic', shadow: '0 0 12px #ff9800', effect: 'shake' },
+  'shadow_ninja': { name: '🥷 影之忍者', color: '#78909c', rarity: 'epic', shadow: '0 0 10px #546e7a', effect: 'pulse' },
+  'star_gazer': { name: '🔭 摘星者', color: '#ba68c8', rarity: 'epic', shadow: '0 0 10px #9c27b0', effect: 'glow' },
+  'time_traveler': { name: '⏳ 时空旅人', color: '#4db6ac', rarity: 'epic', shadow: '0 0 10px #009688', effect: 'pulse' },
+  'dragon_rider': { name: '🐉 龙骑士', color: '#e57373', rarity: 'epic', shadow: '0 0 10px #f44336', effect: 'glow' },
+
+  // 顶尖/传说级 (Legendary)
   'diamond_king': { name: '💎 钻石之王', color: '#00bcd4', rarity: 'legendary', shadow: '0 0 15px #00e5ff', effect: 'rotate' },
   'king': { name: '👑 至尊王者', color: '#ffd54f', rarity: 'legendary', shadow: '0 0 15px #ffb300', effect: 'pulse' },
   'hdd_shadow': { name: '👤 呼大帝之影', color: '#4fc3f7', rarity: 'legendary', shadow: '0 0 15px #03a9f4', effect: 'glow' },
   'god_mode': { name: '🔥 降临神罚', color: '#f44336', rarity: 'legendary', shadow: '0 0 20px #d32f2f', effect: 'shake' },
+  'galaxy_lord': { name: '🌌 银河领主', color: '#b388ff', rarity: 'legendary', shadow: '0 0 20px #651fff', effect: 'pulse' },
+  'immortal': { name: '👼 不朽神明', color: '#ffff8d', rarity: 'legendary', shadow: '0 0 20px #ffea00', effect: 'glow' },
+  'cyber_punk': { name: '🤖 赛博之神', color: '#69f0ae', rarity: 'legendary', shadow: '0 0 20px #00e676', effect: 'pulse' },
+  'abyss_watcher': { name: '👁️ 深渊凝视者', color: '#ff5252', rarity: 'legendary', shadow: '0 0 20px #ff1744', effect: 'shake' },
+  'creator': { name: '✨ 创世神', color: '#ffffff', rarity: 'legendary', shadow: '0 0 25px #ffffff, 0 0 10px #ffeb3b', effect: 'glow' },
 };
 
 type TitleId = keyof typeof TITLES;
@@ -486,38 +509,37 @@ function GameContent() {
     const newTitles = [...unlockedTitles];
     let changed = false;
 
-    if (highScore >= 1000 && !newTitles.includes('expert')) {
-      newTitles.push('expert');
-      changed = true;
-    }
-    if (highScore >= 5000 && !newTitles.includes('void_walker')) {
-      newTitles.push('void_walker');
-      changed = true;
-    }
-    if (highScore >= 9000 && !newTitles.includes('neon_dreamer')) {
-      newTitles.push('neon_dreamer');
-      changed = true;
-    }
-    if (highScore >= 13000 && !newTitles.includes('speed_demon')) {
-      newTitles.push('speed_demon');
-      changed = true;
-    }
-    if (diamonds >= 50000 && !newTitles.includes('diamond_king')) {
-      newTitles.push('diamond_king');
-      changed = true;
-    }
-    if (leaderboard.length > 0 && leaderboard[0].name === (user.displayName || '匿名玩家') && !newTitles.includes('king')) {
-      newTitles.push('king');
-      changed = true;
-    }
-    if (highScore >= 30000 && !newTitles.includes('hdd_shadow')) {
-      newTitles.push('hdd_shadow');
-      changed = true;
-    }
-    if (highScore >= 50000 && !newTitles.includes('god_mode')) {
-      newTitles.push('god_mode');
-      changed = true;
-    }
+    // Common
+    if (highScore >= 500 && !newTitles.includes('runner')) { newTitles.push('runner'); changed = true; }
+    if (highScore >= 800 && !newTitles.includes('jumper')) { newTitles.push('jumper'); changed = true; }
+    if (highScore >= 1200 && !newTitles.includes('explorer')) { newTitles.push('explorer'); changed = true; }
+
+    // Rare
+    if (highScore >= 2000 && !newTitles.includes('expert')) { newTitles.push('expert'); changed = true; }
+    if (highScore >= 3000 && !newTitles.includes('acrobat')) { newTitles.push('acrobat'); changed = true; }
+    if (highScore >= 4000 && !newTitles.includes('survivor')) { newTitles.push('survivor'); changed = true; }
+    if (diamonds >= 5000 && !newTitles.includes('treasure_hunter')) { newTitles.push('treasure_hunter'); changed = true; }
+    if (highScore >= 6000 && !newTitles.includes('wind_chaser')) { newTitles.push('wind_chaser'); changed = true; }
+
+    // Epic
+    if (highScore >= 8000 && !newTitles.includes('void_walker')) { newTitles.push('void_walker'); changed = true; }
+    if (highScore >= 10000 && !newTitles.includes('neon_dreamer')) { newTitles.push('neon_dreamer'); changed = true; }
+    if (highScore >= 12000 && !newTitles.includes('speed_demon')) { newTitles.push('speed_demon'); changed = true; }
+    if (highScore >= 14000 && !newTitles.includes('shadow_ninja')) { newTitles.push('shadow_ninja'); changed = true; }
+    if (highScore >= 16000 && !newTitles.includes('star_gazer')) { newTitles.push('star_gazer'); changed = true; }
+    if (highScore >= 18000 && !newTitles.includes('time_traveler')) { newTitles.push('time_traveler'); changed = true; }
+    if (highScore >= 20000 && !newTitles.includes('dragon_rider')) { newTitles.push('dragon_rider'); changed = true; }
+
+    // Legendary
+    if (diamonds >= 50000 && !newTitles.includes('diamond_king')) { newTitles.push('diamond_king'); changed = true; }
+    if (leaderboard.length > 0 && leaderboard[0].name === (user.displayName || '匿名玩家') && !newTitles.includes('king')) { newTitles.push('king'); changed = true; }
+    if (highScore >= 30000 && !newTitles.includes('hdd_shadow')) { newTitles.push('hdd_shadow'); changed = true; }
+    if (highScore >= 40000 && !newTitles.includes('god_mode')) { newTitles.push('god_mode'); changed = true; }
+    if (highScore >= 50000 && !newTitles.includes('galaxy_lord')) { newTitles.push('galaxy_lord'); changed = true; }
+    if (highScore >= 60000 && !newTitles.includes('immortal')) { newTitles.push('immortal'); changed = true; }
+    if (highScore >= 70000 && !newTitles.includes('cyber_punk')) { newTitles.push('cyber_punk'); changed = true; }
+    if (highScore >= 80000 && !newTitles.includes('abyss_watcher')) { newTitles.push('abyss_watcher'); changed = true; }
+    if (highScore >= 100000 && !newTitles.includes('creator')) { newTitles.push('creator'); changed = true; }
 
     if (changed) {
       setUnlockedTitles(newTitles);
