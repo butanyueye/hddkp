@@ -92,6 +92,17 @@ const BIOMES: Biome[] = [
   { id: 'NEON_DREAM', name: '✨ 霓虹梦境', bgTop: '#c51162', bgBottom: '#6200ea', ground: '#00b8d4', gravityMod: 0.9, jumpMod: 1.3, speedMod: 1.4, slideMod: 1.2, scoreThreshold: 22000 },
 ];
 
+const TITLES = {
+  'rookie': { name: '🌱 初出茅庐', color: '#81c784', rarity: 'common', shadow: 'none', animate: false },
+  'expert': { name: '🏃 跑酷达人', color: '#64b5f6', rarity: 'rare', shadow: '0 0 5px #2196f3', animate: false },
+  'void_walker': { name: '🌀 虚空行者', color: '#9575cd', rarity: 'epic', shadow: '0 0 8px #673ab7', animate: false },
+  'neon_dreamer': { name: '✨ 霓虹之梦', color: '#f06292', rarity: 'epic', shadow: '0 0 10px #e91e63', animate: false },
+  'king': { name: '👑 至尊王者', color: '#ffd54f', rarity: 'legendary', shadow: '0 0 15px #ffb300', animate: true },
+  'hdd_shadow': { name: '👤 呼大帝之影', color: '#4fc3f7', rarity: 'legendary', shadow: '0 0 15px #03a9f4', animate: true },
+};
+
+type TitleId = keyof typeof TITLES;
+
 const DIFFICULTY_SETTINGS = {
   easy: { speed: 3, spawnRate: 150, label: '简单' },
   normal: { speed: 5, spawnRate: 110, label: '普通' },
@@ -453,7 +464,11 @@ function GameContent() {
     doubleScore: 0,
     dash: 0
   });
-  const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string}[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string, titleId?: TitleId}[]>([]);
+  const [selectedTitle, setSelectedTitle] = useState<TitleId | null>(null);
+  const [unlockedTitles, setUnlockedTitles] = useState<TitleId[]>(['rookie']);
+  const [showHonorModal, setShowHonorModal] = useState(false);
+
   const [achievements, setAchievements] = useState<string[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd', 'hgte']);
   const [avatarId, setAvatarId] = useState<string>('hdd');
@@ -461,6 +476,44 @@ function GameContent() {
   const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
   const [reviveCount, setReviveCount] = useState(0);
   const [user, setUser] = useState<User | null>(null);
+
+  // Title Unlock Logic
+  useEffect(() => {
+    if (!user) return;
+    const newTitles = [...unlockedTitles];
+    let changed = false;
+
+    if (highScore >= 5000 && !newTitles.includes('expert')) {
+      newTitles.push('expert');
+      changed = true;
+    }
+    if (highScore >= 12000 && !newTitles.includes('void_walker')) {
+      newTitles.push('void_walker');
+      changed = true;
+    }
+    if (highScore >= 22000 && !newTitles.includes('neon_dreamer')) {
+      newTitles.push('neon_dreamer');
+      changed = true;
+    }
+    if (leaderboard.length > 0 && leaderboard[0].name === (user.displayName || '匿名玩家') && !newTitles.includes('king')) {
+      // This is a bit loose but works for demo
+      newTitles.push('king');
+      changed = true;
+    }
+
+    if (changed) {
+      setUnlockedTitles(newTitles);
+      setDoc(doc(db, 'users', user.uid), { unlockedTitles: newTitles }, { merge: true });
+    }
+  }, [highScore, leaderboard, user]);
+
+  const selectTitle = async (titleId: TitleId | null) => {
+    if (!user) return;
+    setSelectedTitle(titleId);
+    await setDoc(doc(db, 'users', user.uid), { selectedTitle: titleId }, { merge: true });
+    // Also update leaderboard if exists
+    await setDoc(doc(db, 'leaderboard', user.uid), { titleId }, { merge: true });
+  };
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
   const [hxdImage, setHxdImage] = useState<HTMLImageElement | null>(null);
@@ -618,7 +671,9 @@ function GameContent() {
               
               setAvatarId(data.avatarId || 'hdd');
               setFriends(data.friends || []);
-              setHgteFragments(hgteFragments);
+              setHgteFragments(data.hgteFragments || 0);
+              setSelectedTitle(data.selectedTitle || null);
+              setUnlockedTitles(data.unlockedTitles || ['rookie']);
             } else {
               // Initialize user doc
               const initialData = {
@@ -633,7 +688,9 @@ function GameContent() {
                 unlockedCharacters: ['hdd'],
                 hgteFragments: 0,
                 avatarId: 'hdd',
-                friends: []
+                friends: [],
+                selectedTitle: null,
+                unlockedTitles: ['rookie']
               };
               await setDoc(doc(db, 'users', u.uid), initialData);
             }
@@ -737,7 +794,8 @@ function GameContent() {
       const entries = snapshot.docs.map(doc => ({
         name: doc.data().name,
         score: doc.data().score,
-        avatarId: doc.data().avatarId
+        avatarId: doc.data().avatarId,
+        titleId: doc.data().titleId
       }));
       setLeaderboard(entries);
     }, (error) => {
@@ -1489,6 +1547,7 @@ function GameContent() {
           name: user.displayName || (user.isAnonymous ? '游客玩家' : '匿名玩家'),
           score: finalScore,
           avatarId: avatarId,
+          titleId: selectedTitle,
           timestamp: serverTimestamp()
         });
       } else {
@@ -3260,6 +3319,32 @@ function GameContent() {
         
         ctx.drawImage(playerImage, player.x + offsetX, player.y + offsetY, drawWidth, drawHeight);
         ctx.restore();
+
+        // Draw Title above head
+        if (selectedTitle && TITLES[selectedTitle]) {
+          const title = TITLES[selectedTitle];
+          ctx.save();
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          
+          // Animate pulse if needed
+          let alpha = 1;
+          if (title.animate) {
+            alpha = 0.7 + Math.sin(frameCountRef.current / 10) * 0.3;
+          }
+          
+          ctx.globalAlpha = alpha;
+          
+          // Shadow/Glow
+          if (title.shadow !== 'none') {
+            ctx.shadowColor = title.color;
+            ctx.shadowBlur = 10;
+          }
+          
+          ctx.fillStyle = title.color;
+          ctx.fillText(title.name, player.x + player.width / 2, player.y - 20);
+          ctx.restore();
+        }
       } else {
         // Flickering effect for invincibility
         if (player.invincibility > 0) {
@@ -3479,6 +3564,94 @@ function GameContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Honor Modal */}
+        {showHonorModal && (
+          <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-[#fff8e1] w-full max-w-md rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center"
+            >
+              <div className="w-full flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <Trophy className="text-[#ffb300]" size={32} />
+                  <h2 className="text-3xl font-black text-[#e65100]">荣誉殿堂</h2>
+                </div>
+                <button onClick={() => setShowHonorModal(false)} className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
+              </div>
+
+              <div className="w-full bg-white/50 rounded-2xl p-4 mb-6 border-2 border-[#ffb300]/20">
+                <p className="text-[#5d4037] font-bold text-center mb-4 italic">“真正的强者，不仅有实力，更有象征身份的称号。”</p>
+                <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                  {(Object.keys(TITLES) as TitleId[]).map((titleId) => {
+                    const title = TITLES[titleId];
+                    const isUnlocked = unlockedTitles.includes(titleId);
+                    const isSelected = selectedTitle === titleId;
+
+                    return (
+                      <div 
+                        key={titleId}
+                        className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden ${
+                          isUnlocked 
+                            ? isSelected 
+                              ? 'bg-white border-[#ffb300] shadow-md ring-2 ring-[#ffb300]/20' 
+                              : 'bg-white border-gray-200 hover:border-[#ffb300]/50 cursor-pointer'
+                            : 'bg-gray-100 border-gray-200 opacity-60 grayscale'
+                        }`}
+                        onClick={() => isUnlocked && selectTitle(isSelected ? null : titleId)}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex flex-col">
+                            <span 
+                              className={`text-lg font-black ${title.animate ? 'animate-pulse' : ''}`}
+                              style={{ 
+                                color: title.color,
+                                textShadow: title.shadow
+                              }}
+                            >
+                              {title.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                              {title.rarity === 'legendary' ? '✨ 传说' : title.rarity === 'epic' ? '🌟 史诗' : title.rarity === 'rare' ? '💎 稀有' : '🌱 普通'}
+                            </span>
+                          </div>
+                          {isUnlocked ? (
+                            isSelected ? (
+                              <div className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">已佩戴</div>
+                            ) : (
+                              <div className="bg-gray-200 text-gray-500 px-3 py-1 rounded-full text-xs font-black">点击佩戴</div>
+                            )
+                          ) : (
+                            <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                              <Lock size={12} />
+                              <span>未解锁</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Requirements hint */}
+                        {!isUnlocked && (
+                          <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
+                            解锁条件：{
+                              titleId === 'expert' ? '历史最高分达到 5000' :
+                              titleId === 'void_walker' ? '历史最高分达到 12000' :
+                              titleId === 'neon_dreamer' ? '历史最高分达到 22000' :
+                              titleId === 'king' ? '获得排行榜第一名' :
+                              titleId === 'hdd_shadow' ? '解锁隐藏成就' : '初始赠送'
+                            }
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-400 font-bold text-center">称号将在排行榜和个人资料中展示</p>
+            </motion.div>
+          </div>
+        )}
 
         {/* Gacha Result Modal */}
         {showGachaResultModal && (
@@ -3720,16 +3893,29 @@ function GameContent() {
           </div>
         )}
 
-        {/* Mute Button */}
-        <button 
-          onClick={() => {
-            const muted = toggleMute();
-            setIsMutedState(muted);
-          }}
-          className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/50 rounded-full flex items-center justify-center border border-white/20 hover:bg-black/70 transition-colors"
-        >
-          {isMutedState ? <VolumeX className="text-white" size={20} /> : <Volume2 className="text-white" size={20} />}
-        </button>
+        {/* Top Right Controls */}
+        <div className="absolute top-4 right-4 z-[70] flex flex-col gap-3 items-center">
+          <button 
+            onClick={() => {
+              const muted = toggleMute();
+              setIsMutedState(muted);
+            }}
+            className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center border border-white/20 hover:bg-black/70 transition-colors shadow-lg"
+          >
+            {isMutedState ? <VolumeX className="text-white" size={20} /> : <Volume2 className="text-white" size={20} />}
+          </button>
+          
+          {gameState === 'start' && (
+            <motion.button 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowHonorModal(true)}
+              className="w-10 h-10 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full flex items-center justify-center border border-white/20 shadow-lg"
+            >
+              <Trophy className="text-white" size={20} />
+            </motion.button>
+          )}
+        </div>
 
         {/* Pause Button (Playing) */}
         {gameState === 'playing' && (
@@ -3924,6 +4110,19 @@ function GameContent() {
                           {user?.displayName || (user?.isAnonymous ? '游客' : (user ? '呼大帝' : '未登录'))}
                         </span>
                       </div>
+                      {selectedTitle && TITLES[selectedTitle] && (
+                        <span 
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[selectedTitle].animate ? 'animate-pulse' : ''}`}
+                          style={{ 
+                            color: TITLES[selectedTitle].color, 
+                            backgroundColor: `${TITLES[selectedTitle].color}20`,
+                            textShadow: TITLES[selectedTitle].shadow,
+                            border: `1px solid ${TITLES[selectedTitle].color}40`
+                          }}
+                        >
+                          {TITLES[selectedTitle].name}
+                        </span>
+                      )}
                       {user && (
                         <button 
                           onClick={logout}
@@ -3944,9 +4143,6 @@ function GameContent() {
                     </button>
                   )}
                 </div>
-                <button className="w-12 h-12 bg-[#ef5350] rounded-full flex items-center justify-center border-4 border-[#ffcdd2] shadow-lg">
-                  <X className="text-white" size={24} />
-                </button>
               </div>
 
               {/* Title */}
@@ -3973,7 +4169,7 @@ function GameContent() {
               {/* Character & Side Buttons */}
               <div className="flex-1 w-full relative flex items-center justify-center mt-4">
                 {/* Side Buttons */}
-                <div className="absolute left-0 top-0 flex flex-col gap-6 z-20">
+                <div className="absolute left-0 top-0 flex flex-col gap-4 z-20">
                   <div className="flex flex-col items-center">
                     <button 
                       onClick={() => setShowCheckInModal(true)}
@@ -4004,7 +4200,7 @@ function GameContent() {
                 </div>
 
                 {/* Right Side Buttons */}
-                <div className="absolute right-0 top-0 flex flex-col gap-6 z-20">
+                <div className="absolute right-0 top-0 flex flex-col gap-4 z-20">
                   <div className="flex flex-col items-center">
                     <button 
                       onClick={() => setShowFriendsModal(true)}
@@ -4475,22 +4671,42 @@ function GameContent() {
                   <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">X</button>
                 </div>
                 
-                <div className="w-full space-y-2 mb-6 max-h-[400px] overflow-y-auto pr-1">
+                <div className="w-full space-y-3 mb-6 max-h-[400px] overflow-y-auto pr-1">
                   {leaderboard.length > 0 ? leaderboard.map((entry, i) => (
-                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-2xl border-2 border-gray-100 shadow-sm">
+                    <motion.div 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      key={i} 
+                      className={`flex justify-between items-center p-3 rounded-2xl border-2 shadow-sm relative overflow-hidden ${
+                        i === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400 scale-[1.05] z-10 my-2' : 
+                        i === 1 ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300' : 
+                        i === 2 ? 'bg-gradient-to-r from-orange-50 to-orange-100 border-orange-300' : 'bg-white border-gray-100'
+                      }`}
+                    >
+                      {i === 0 && (
+                        <motion.div 
+                          animate={{ rotate: [0, 10, -10, 0] }}
+                          transition={{ repeat: Infinity, duration: 2 }}
+                          className="absolute -top-1 -right-1 text-2xl z-20"
+                        >
+                          👑
+                        </motion.div>
+                      )}
+                      
                       <div className="flex items-center gap-3">
                         <div className="relative">
-                          <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white z-10 shadow-sm ${
-                            i === 0 ? 'bg-yellow-400' : 
-                            i === 1 ? 'bg-gray-300' : 
-                            i === 2 ? 'bg-orange-400' : 'bg-gray-400'
+                          <span className={`absolute -top-1 -left-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white z-10 shadow-md ${
+                            i === 0 ? 'bg-yellow-500' : 
+                            i === 1 ? 'bg-gray-400' : 
+                            i === 2 ? 'bg-orange-500' : 'bg-gray-400'
                           }`}>
                             {i + 1}
                           </span>
-                          <div className={`w-10 h-10 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 ${
-                            i === 0 ? 'border-yellow-400' : 
-                            i === 1 ? 'border-gray-300' : 
-                            i === 2 ? 'border-orange-400' : 'border-gray-100'
+                          <div className={`w-12 h-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 shadow-inner ${
+                            i === 0 ? 'border-yellow-400 ring-4 ring-yellow-200' : 
+                            i === 1 ? 'border-gray-300 ring-4 ring-gray-100' : 
+                            i === 2 ? 'border-orange-400 ring-4 ring-orange-100' : 'border-gray-100'
                           }`}>
                             <img 
                               src={getCharacterImage(entry.avatarId || 'hdd')} 
@@ -4499,13 +4715,35 @@ function GameContent() {
                             />
                           </div>
                         </div>
-                        <span className="font-black text-[#5d4037] truncate max-w-[120px]">{entry.name}</span>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1">
+                            <span className={`font-black text-[#5d4037] truncate ${i === 0 ? 'text-lg' : 'text-base'} max-w-[100px]`}>{entry.name}</span>
+                            {i < 3 && <Star className={`w-3 h-3 ${i === 0 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />}
+                          </div>
+                          {entry.titleId && TITLES[entry.titleId] && (
+                            <span 
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].animate ? 'animate-pulse' : ''}`}
+                              style={{ 
+                                color: TITLES[entry.titleId].color, 
+                                backgroundColor: `${TITLES[entry.titleId].color}20`,
+                                textShadow: TITLES[entry.titleId].shadow,
+                                border: `1px solid ${TITLES[entry.titleId].color}40`
+                              }}
+                            >
+                              {TITLES[entry.titleId].name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="font-mono font-black text-yellow-600 text-lg leading-none">{entry.score}</span>
+                        <span className={`font-mono font-black text-lg leading-none ${
+                          i === 0 ? 'text-yellow-700 text-xl' : 
+                          i === 1 ? 'text-gray-600' : 
+                          i === 2 ? 'text-orange-700' : 'text-yellow-600'
+                        }`}>{entry.score}</span>
                         <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Points</span>
                       </div>
-                    </div>
+                    </motion.div>
                   )) : (
                     <div className="flex flex-col items-center justify-center py-10 opacity-40">
                       <span className="text-4xl mb-2">🏆</span>
