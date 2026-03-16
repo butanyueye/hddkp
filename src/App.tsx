@@ -125,9 +125,37 @@ const TITLES = {
   'cyber_punk': { name: '🤖 赛博之神', color: '#69f0ae', rarity: 'legendary', shadow: '0 0 20px #00e676', effect: 'pulse' },
   'abyss_watcher': { name: '👁️ 深渊凝视者', color: '#ff5252', rarity: 'legendary', shadow: '0 0 20px #ff1744', effect: 'shake' },
   'creator': { name: '✨ 创世神', color: '#ffffff', rarity: 'legendary', shadow: '0 0 25px #ffffff, 0 0 10px #ffeb3b', effect: 'glow' },
+
+  // 排位专属称号 (Ranked)
+  'rank_bronze': { name: '🥉 初出茅庐', color: '#cd7f32', rarity: 'common', shadow: 'none', effect: 'none' },
+  'rank_silver': { name: '🥈 崭露头角', color: '#c0c0c0', rarity: 'common', shadow: 'none', effect: 'none' },
+  'rank_gold': { name: '🥇 身经百战', color: '#ffd700', rarity: 'rare', shadow: '0 0 5px #ffb300', effect: 'none' },
+  'rank_platinum': { name: '💎 傲视群雄', color: '#00e5ff', rarity: 'rare', shadow: '0 0 8px #00bcd4', effect: 'glow' },
+  'rank_diamond': { name: '💠 璀璨之星', color: '#b388ff', rarity: 'epic', shadow: '0 0 10px #7c4dff', effect: 'pulse' },
+  'rank_star': { name: '🌟 星光熠熠', color: '#ff4081', rarity: 'epic', shadow: '0 0 15px #f50057', effect: 'rotate' },
+  'rank_king': { name: '👑 荣耀王者', color: '#ff1744', rarity: 'legendary', shadow: '0 0 20px #d50000', effect: 'shake' },
 };
 
 type TitleId = keyof typeof TITLES;
+
+const AVATAR_FRAMES = {
+  'gold_shield': { name: '黄金之盾', color: '#ffd700', effect: 'none', border: '4px solid #ffd700', shadow: '0 0 10px #ffd700' },
+  'platinum_wings': { name: '铂金之翼', color: '#00e5ff', effect: 'glow', border: '4px solid #00e5ff', shadow: '0 0 15px #00e5ff' },
+  'diamond_light': { name: '钻石之光', color: '#b388ff', effect: 'pulse', border: '4px dashed #b388ff', shadow: '0 0 20px #b388ff' },
+  'star_glow': { name: '星耀之芒', color: '#ff4081', effect: 'rotate', border: '4px dotted #ff4081', shadow: '0 0 25px #ff4081' },
+  'king_wind': { name: '王者之风', color: '#ff1744', effect: 'shake', border: '4px double #ff1744', shadow: '0 0 30px #ff1744' },
+};
+
+type FrameId = keyof typeof AVATAR_FRAMES;
+
+const ENTRANCE_EFFECTS = {
+  'flowing_light': { name: '流光溢彩', color: '#00e5ff', type: 'flash' },
+  'diamond_sparkle': { name: '碎钻闪耀', color: '#b388ff', type: 'sparkle' },
+  'star_trek': { name: '星际迷航', color: '#ff4081', type: 'warp' },
+  'king_arrival': { name: '君临天下', color: '#ff1744', type: 'screen_shake' },
+};
+
+type EntranceEffectId = keyof typeof ENTRANCE_EFFECTS;
 
 const DIFFICULTY_SETTINGS = {
   easy: { speed: 3, spawnRate: 150, label: '简单' },
@@ -482,6 +510,21 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
+const AvatarWithFrame = ({ avatarId, frameId, className = "w-16 h-16", onClick }: { avatarId: string, frameId?: FrameId | null, className?: string, onClick?: () => void }) => {
+  const frame = frameId && AVATAR_FRAMES[frameId] ? AVATAR_FRAMES[frameId] : null;
+  return (
+    <div 
+      className={`relative ${className} rounded-lg bg-[#f5e6c4] shrink-0 ${onClick ? 'cursor-pointer' : ''} ${frame?.effect === 'shake' ? 'animate-bounce' : ''}`}
+      style={frame ? { border: frame.border, boxShadow: frame.shadow } : { border: '2px solid rgba(234, 179, 8, 0.5)' }}
+      onClick={onClick}
+    >
+      <img src={getCharacterImage(avatarId)} alt="avatar" className={`w-full h-full object-contain ${frame?.effect === 'rotate' ? 'animate-spin' : ''}`} />
+      {frame && frame.effect === 'glow' && <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />}
+      {frame && frame.effect === 'pulse' && <div className="absolute inset-0 border-4 border-white/30 animate-ping pointer-events-none rounded-lg" />}
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -512,13 +555,19 @@ function GameContent() {
     doubleScore: 0,
     dash: 0
   });
-  const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string, titleId?: TitleId}[]>([]);
-  const [rankLeaderboard, setRankLeaderboard] = useState<{name: string, rankPoints: number, avatarId?: string, titleId?: TitleId}[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{name: string, score: number, avatarId?: string, titleId?: TitleId, frameId?: FrameId, entranceEffectId?: EntranceEffectId}[]>([]);
+  const [rankLeaderboard, setRankLeaderboard] = useState<{name: string, rankPoints: number, avatarId?: string, titleId?: TitleId, frameId?: FrameId, entranceEffectId?: EntranceEffectId}[]>([]);
   const [leaderboardTab, setLeaderboardTab] = useState<'score' | 'rank'>('score');
   const [selectedTitle, setSelectedTitle] = useState<TitleId | null>(null);
   const [unlockedTitles, setUnlockedTitles] = useState<TitleId[]>(['rookie']);
+  const [selectedFrame, setSelectedFrame] = useState<FrameId | null>(null);
+  const [unlockedFrames, setUnlockedFrames] = useState<FrameId[]>([]);
+  const [selectedEntranceEffect, setSelectedEntranceEffect] = useState<EntranceEffectId | null>(null);
+  const [unlockedEntranceEffects, setUnlockedEntranceEffects] = useState<EntranceEffectId[]>([]);
   const [showHonorModal, setShowHonorModal] = useState(false);
+  const [honorTab, setHonorTab] = useState<'titles' | 'frames' | 'effects'>('titles');
   const [showRankedModal, setShowRankedModal] = useState(false);
+  const [showRankRewardsModal, setShowRankRewardsModal] = useState(false);
 
   const [achievements, setAchievements] = useState<string[]>([]);
   const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd', 'hgte']);
@@ -566,11 +615,45 @@ function GameContent() {
     if (highScore >= 80000 && !newTitles.includes('abyss_watcher')) { newTitles.push('abyss_watcher'); changed = true; }
     if (highScore >= 100000 && !newTitles.includes('creator')) { newTitles.push('creator'); changed = true; }
 
+    // Ranked Titles
+    if (rankPoints >= 0 && !newTitles.includes('rank_bronze')) { newTitles.push('rank_bronze'); changed = true; }
+    if (rankPoints >= 1200 && !newTitles.includes('rank_silver')) { newTitles.push('rank_silver'); changed = true; }
+    if (rankPoints >= 1400 && !newTitles.includes('rank_gold')) { newTitles.push('rank_gold'); changed = true; }
+    if (rankPoints >= 1600 && !newTitles.includes('rank_platinum')) { newTitles.push('rank_platinum'); changed = true; }
+    if (rankPoints >= 1800 && !newTitles.includes('rank_diamond')) { newTitles.push('rank_diamond'); changed = true; }
+    if (rankPoints >= 2000 && !newTitles.includes('rank_star')) { newTitles.push('rank_star'); changed = true; }
+    if (rankPoints >= 2200 && !newTitles.includes('rank_king')) { newTitles.push('rank_king'); changed = true; }
+
     if (changed) {
       setUnlockedTitles(newTitles);
       setDoc(doc(db, 'users', user.uid), { unlockedTitles: newTitles }, { merge: true });
     }
-  }, [highScore, leaderboard, user, diamonds]);
+
+    const newFrames = [...unlockedFrames];
+    let framesChanged = false;
+    if (rankPoints >= 1400 && !newFrames.includes('gold_shield')) { newFrames.push('gold_shield'); framesChanged = true; }
+    if (rankPoints >= 1600 && !newFrames.includes('platinum_wings')) { newFrames.push('platinum_wings'); framesChanged = true; }
+    if (rankPoints >= 1800 && !newFrames.includes('diamond_light')) { newFrames.push('diamond_light'); framesChanged = true; }
+    if (rankPoints >= 2000 && !newFrames.includes('star_glow')) { newFrames.push('star_glow'); framesChanged = true; }
+    if (rankPoints >= 2200 && !newFrames.includes('king_wind')) { newFrames.push('king_wind'); framesChanged = true; }
+
+    if (framesChanged) {
+      setUnlockedFrames(newFrames);
+      setDoc(doc(db, 'users', user.uid), { unlockedFrames: newFrames }, { merge: true });
+    }
+
+    const newEffects = [...unlockedEntranceEffects];
+    let effectsChanged = false;
+    if (rankPoints >= 1600 && !newEffects.includes('flowing_light')) { newEffects.push('flowing_light'); effectsChanged = true; }
+    if (rankPoints >= 1800 && !newEffects.includes('diamond_sparkle')) { newEffects.push('diamond_sparkle'); effectsChanged = true; }
+    if (rankPoints >= 2000 && !newEffects.includes('star_trek')) { newEffects.push('star_trek'); effectsChanged = true; }
+    if (rankPoints >= 2200 && !newEffects.includes('king_arrival')) { newEffects.push('king_arrival'); effectsChanged = true; }
+
+    if (effectsChanged) {
+      setUnlockedEntranceEffects(newEffects);
+      setDoc(doc(db, 'users', user.uid), { unlockedEntranceEffects: newEffects }, { merge: true });
+    }
+  }, [highScore, leaderboard, user, diamonds, rankPoints, unlockedTitles, unlockedFrames, unlockedEntranceEffects]);
 
   const selectTitle = async (titleId: TitleId | null) => {
     if (!user) return;
@@ -578,6 +661,20 @@ function GameContent() {
     await setDoc(doc(db, 'users', user.uid), { selectedTitle: titleId }, { merge: true });
     // Also update leaderboard if exists
     await setDoc(doc(db, 'leaderboard', user.uid), { titleId }, { merge: true });
+  };
+
+  const selectFrame = async (frameId: FrameId | null) => {
+    if (!user) return;
+    setSelectedFrame(frameId);
+    await setDoc(doc(db, 'users', user.uid), { selectedFrame: frameId }, { merge: true });
+    await setDoc(doc(db, 'leaderboard', user.uid), { frameId }, { merge: true });
+  };
+
+  const selectEntranceEffect = async (effectId: EntranceEffectId | null) => {
+    if (!user) return;
+    setSelectedEntranceEffect(effectId);
+    await setDoc(doc(db, 'users', user.uid), { selectedEntranceEffect: effectId }, { merge: true });
+    await setDoc(doc(db, 'leaderboard', user.uid), { entranceEffectId: effectId }, { merge: true });
   };
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [playerImage, setPlayerImage] = useState<HTMLImageElement | null>(null);
@@ -617,7 +714,8 @@ function GameContent() {
     biomeTransition: 0,
     announcement: '',
     announcementTimer: 0,
-    hasAnnouncedNewRecord: false
+    hasAnnouncedNewRecord: false,
+    entranceEffectTimer: 0
   });
 
   const playerRef = useRef<Player>({ 
@@ -700,7 +798,7 @@ function GameContent() {
   const [friends, setFriends] = useState<string[]>([]);
   const [rankChange, setRankChange] = useState<{from: any, to: any, type: 'up' | 'down' | 'same', rpChange: number, currentRP: number, newRP: number} | null>(null);
 
-  const isModalOpen = showHonorModal || showRankedModal || showAvatarSelect || showCharSelect || 
+  const isModalOpen = showHonorModal || showRankedModal || showRankRewardsModal || showAvatarSelect || showCharSelect || 
                       showCheckInModal || showGachaResultModal || showInventoryModal || 
                       showFriendsModal || showAuthModal || rankChange !== null ||
                       ['leaderboard', 'shop', 'gacha', 'instructions'].includes(gameState);
@@ -750,6 +848,10 @@ function GameContent() {
               setHgteFragments(data.hgteFragments || 0);
               setSelectedTitle(data.selectedTitle || null);
               setUnlockedTitles(data.unlockedTitles || ['rookie']);
+              setSelectedFrame(data.selectedFrame || null);
+              setUnlockedFrames(data.unlockedFrames || []);
+              setSelectedEntranceEffect(data.selectedEntranceEffect || null);
+              setUnlockedEntranceEffects(data.unlockedEntranceEffects || []);
 
               // Migration for existing users
               if (!('rankPoints' in data)) {
@@ -778,7 +880,11 @@ function GameContent() {
                 avatarId: 'hdd',
                 friends: [],
                 selectedTitle: null,
-                unlockedTitles: ['rookie']
+                unlockedTitles: ['rookie'],
+                selectedFrame: null,
+                unlockedFrames: [],
+                selectedEntranceEffect: null,
+                unlockedEntranceEffects: []
               };
               await setDoc(doc(db, 'users', u.uid), initialData);
             }
@@ -886,7 +992,9 @@ function GameContent() {
         name: doc.data().name,
         score: doc.data().score,
         avatarId: doc.data().avatarId,
-        titleId: doc.data().titleId
+        titleId: doc.data().titleId,
+        frameId: doc.data().frameId,
+        entranceEffectId: doc.data().entranceEffectId
       }));
       setLeaderboard(entries);
     }, (error) => {
@@ -905,7 +1013,9 @@ function GameContent() {
           rankedWins: data.rankedWins || 0,
           rankedTotal: data.rankedTotal || 0,
           avatarId: data.avatarId,
-          titleId: data.titleId
+          titleId: data.selectedTitle,
+          frameId: data.selectedFrame,
+          entranceEffectId: data.selectedEntranceEffect
         };
       });
       console.log("Rank Leaderboard updated:", entries.length, "entries");
@@ -1708,8 +1818,8 @@ function GameContent() {
 
       if (rankUpOrDown) {
         setRankChange(rankUpOrDown);
-        // Auto hide after 4 seconds
-        setTimeout(() => setRankChange(null), 4000);
+        // Auto hide after 6 seconds for the new cool animation
+        setTimeout(() => setRankChange(null), 6000);
       }
 
       if (toastMsg) {
@@ -1779,7 +1889,8 @@ function GameContent() {
       biomeTransition: 0,
       announcement: '🌲 绿野森林',
       announcementTimer: 120,
-      hasAnnouncedNewRecord: false
+      hasAnnouncedNewRecord: false,
+      entranceEffectTimer: selectedEntranceEffect ? 180 : 0
     };
     
     // Initialize game inventory with a cap of 5
@@ -3624,6 +3735,109 @@ function GameContent() {
         ctx.restore();
       }
 
+      // Draw Entrance Effect
+      if (envRef.current.entranceEffectTimer > 0 && selectedEntranceEffect) {
+        const effect = ENTRANCE_EFFECTS[selectedEntranceEffect];
+        const timer = envRef.current.entranceEffectTimer;
+        const maxTimer = 180;
+        const progress = 1 - (timer / maxTimer);
+        
+        ctx.save();
+        
+        if (effect.type === 'flash') {
+          // Flowing light effect
+          ctx.globalAlpha = Math.max(0, Math.sin(progress * Math.PI) * 0.8);
+          const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          gradient.addColorStop(0, 'transparent');
+          gradient.addColorStop(0.5, effect.color);
+          gradient.addColorStop(1, 'transparent');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Light beams
+          ctx.globalAlpha = Math.max(0, Math.sin(progress * Math.PI * 2) * 0.5);
+          ctx.beginPath();
+          ctx.moveTo(canvas.width / 2, 0);
+          ctx.lineTo(player.x - 100, canvas.height);
+          ctx.lineTo(player.x + player.width + 100, canvas.height);
+          ctx.fillStyle = effect.color;
+          ctx.fill();
+        } else if (effect.type === 'sparkle') {
+          // Diamond sparkle effect
+          ctx.globalAlpha = Math.max(0, timer / maxTimer);
+          for (let i = 0; i < 20; i++) {
+            const x = (Math.sin(progress * 10 + i) * 0.5 + 0.5) * canvas.width;
+            const y = (Math.cos(progress * 15 + i) * 0.5 + 0.5) * canvas.height;
+            const size = Math.random() * 10 + 5;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(progress * Math.PI * 4 + i);
+            ctx.fillStyle = effect.color;
+            ctx.shadowColor = effect.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.lineTo(size/3, -size/3);
+            ctx.lineTo(size, 0);
+            ctx.lineTo(size/3, size/3);
+            ctx.lineTo(0, size);
+            ctx.lineTo(-size/3, size/3);
+            ctx.lineTo(-size, 0);
+            ctx.lineTo(-size/3, -size/3);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+        } else if (effect.type === 'warp') {
+          // Star trek warp effect
+          ctx.globalAlpha = Math.max(0, timer / maxTimer);
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          for (let i = 0; i < 50; i++) {
+            const angle = (i / 50) * Math.PI * 2 + progress * 2;
+            const dist = progress * canvas.width * (Math.random() * 0.5 + 0.5);
+            const length = Math.random() * 50 + 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(angle) * dist, Math.sin(angle) * dist);
+            ctx.lineTo(Math.cos(angle) * (dist + length), Math.sin(angle) * (dist + length));
+            ctx.strokeStyle = effect.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        } else if (effect.type === 'screen_shake') {
+          // King arrival effect
+          if (timer > 120) {
+            const shake = (timer - 120) / 60 * 10;
+            ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+          }
+          
+          ctx.globalAlpha = Math.max(0, Math.sin(progress * Math.PI));
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          ctx.shadowColor = effect.color;
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = effect.color;
+          ctx.font = '900 60px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          // Scale text
+          const scale = 1 + Math.sin(progress * Math.PI) * 0.5;
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.scale(scale, scale);
+          ctx.fillText(effect.name, 0, 0);
+        }
+        
+        ctx.restore();
+        
+        // Update timer
+        if (gameState === 'playing') {
+          envRef.current.entranceEffectTimer--;
+        }
+      }
+
       // Score is now rendered via React overlay
     };
 
@@ -3839,13 +4053,17 @@ function GameContent() {
                       </div>
                     </div>
 
-                    <div className="w-full bg-blue-50 p-2 rounded-xl border border-blue-200 text-[10px] text-blue-800 font-bold">
-                      <p>🏆 奖励说明：</p>
-                      <ul className="list-disc pl-3 mt-0.5 space-y-0.5">
-                        <li>每日首胜 <span className="text-blue-600">50 钻石</span></li>
-                        <li>赛季结算专属称号</li>
-                        <li>胜利加分，失败扣分</li>
-                      </ul>
+                    <div className="w-full bg-blue-50 p-2 rounded-xl border border-blue-200 flex justify-between items-center">
+                      <div className="text-[10px] text-blue-800 font-bold">
+                        <p>🏆 赛季奖励：</p>
+                        <p className="text-blue-600 mt-0.5">称号、头像框、特效、海量钻石</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowRankRewardsModal(true)}
+                        className="px-3 py-1.5 bg-blue-500 text-white text-[10px] font-bold rounded-lg shadow-sm hover:bg-blue-600 transition-colors"
+                      >
+                        查看详情
+                      </button>
                     </div>
 
                     <button 
@@ -3865,6 +4083,61 @@ function GameContent() {
           </div>
         )}
 
+        {/* Rank Rewards Modal */}
+        {showRankRewardsModal && (
+          <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-[#1a2a40] w-full max-w-md max-h-[80vh] rounded-3xl p-6 border-4 border-[#4aadff] shadow-[0_10px_0_#02579a,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center relative overflow-hidden"
+            >
+              <button 
+                onClick={() => setShowRankRewardsModal(false)} 
+                className="absolute top-4 right-4 text-[#4aadff] hover:text-white hover:scale-110 transition-all z-10"
+              >
+                <X size={24} strokeWidth={3} />
+              </button>
+
+              <div className="w-full text-center mb-6 relative z-10">
+                <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-[#4aadff] tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">赛季排位奖励</h2>
+                <p className="text-[#a0c4ff] text-sm font-bold mt-1">达到指定段位即可在赛季结算时获得丰厚奖励</p>
+              </div>
+
+              <div className="w-full overflow-y-auto pr-2 space-y-4 relative z-10 custom-scrollbar">
+                {[
+                  { rank: '王者', icon: '👑', color: '#ff1744', desc: '全服顶尖的象征', rewards: ['称号：荣耀王者', '动态头像框：王者之风', '全屏进场特效：君临天下', '专属皮肤：巅峰荣耀', '1500 钻石'] },
+                  { rank: '星耀', icon: '🌟', color: '#ff4081', desc: '星光璀璨的强者', rewards: ['称号：星光熠熠', '动态头像框：星耀之芒', '进场特效：星际迷航', '800 钻石'] },
+                  { rank: '钻石', icon: '💠', color: '#b388ff', desc: '坚不可摧的精英', rewards: ['称号：璀璨之星', '头像框：钻石之光', '进场特效：碎钻闪耀', '500 钻石'] },
+                  { rank: '铂金', icon: '💎', color: '#00e5ff', desc: '技艺精湛的高手', rewards: ['称号：傲视群雄', '头像框：铂金之翼', '进场特效：流光溢彩', '300 钻石'] },
+                  { rank: '黄金', icon: '🥇', color: '#ffd700', desc: '身经百战的勇士', rewards: ['称号：身经百战', '头像框：黄金之盾', '200 钻石'] },
+                  { rank: '白银', icon: '🥈', color: '#c0c0c0', desc: '崭露头角的新秀', rewards: ['称号：崭露头角', '100 钻石'] },
+                  { rank: '青铜', icon: '🥉', color: '#cd7f32', desc: '初出茅庐的挑战者', rewards: ['称号：初出茅庐', '50 钻石'] },
+                ].map((tier, idx) => (
+                  <div key={idx} className="bg-white/5 rounded-2xl p-4 border border-white/10 flex items-start gap-4 relative overflow-hidden group hover:bg-white/10 transition-colors">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -z-10" />
+                    <div className="flex flex-col items-center justify-center min-w-[80px]">
+                      <div className="w-16 h-16 rounded-full flex items-center justify-center text-4xl shadow-[0_0_15px_rgba(0,0,0,0.5)] border-2" style={{ borderColor: tier.color, background: `radial-gradient(circle, ${tier.color}40 0%, transparent 80%)` }}>
+                        {tier.icon}
+                      </div>
+                      <span className="font-black mt-2 text-lg" style={{ color: tier.color, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{tier.rank}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-gray-400 text-xs font-bold mb-2">{tier.desc}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {tier.rewards.map((reward, rIdx) => (
+                          <span key={rIdx} className="px-2 py-1 bg-black/40 rounded-md text-xs font-bold text-blue-200 border border-blue-500/30">
+                            {reward}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Honor Modal */}
         {showHonorModal && (
           <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -3873,7 +4146,7 @@ function GameContent() {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-[#fff8e1] w-full max-w-md rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center"
             >
-              <div className="w-full flex justify-between items-center mb-6">
+              <div className="w-full flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                   <Trophy className="text-[#ffb300]" size={32} />
                   <h2 className="text-3xl font-black text-[#e65100]">荣誉殿堂</h2>
@@ -3881,94 +4154,242 @@ function GameContent() {
                 <button onClick={() => setShowHonorModal(false)} className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
               </div>
 
-              <div className="w-full bg-white/50 rounded-2xl p-4 mb-6 border-2 border-[#ffb300]/20">
-                <p className="text-[#5d4037] font-bold text-center mb-4 italic">“真正的强者，不仅有实力，更有象征身份的称号。”</p>
-                <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2">
-                  {(Object.keys(TITLES) as TitleId[]).map((titleId) => {
-                    const title = TITLES[titleId];
-                    const isUnlocked = unlockedTitles.includes(titleId);
-                    const isSelected = selectedTitle === titleId;
-
-                    return (
-                      <div 
-                        key={titleId}
-                        className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden ${
-                          isUnlocked 
-                            ? isSelected 
-                              ? 'bg-white border-[#ffb300] shadow-md ring-2 ring-[#ffb300]/20' 
-                              : 'bg-white border-gray-200 hover:border-[#ffb300]/50 cursor-pointer'
-                            : 'bg-gray-100 border-gray-200 opacity-60 grayscale'
-                        }`}
-                        onClick={() => isUnlocked && selectTitle(isSelected ? null : titleId)}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div className="flex flex-col">
-                            <span 
-                              className={`text-lg font-black ${title.effect === 'pulse' ? 'animate-pulse' : title.effect === 'rotate' ? 'animate-spin' : title.effect === 'shake' ? 'animate-bounce' : ''}`}
-                              style={{ 
-                                color: title.color,
-                                textShadow: title.shadow
-                              }}
-                            >
-                              {title.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                              {title.rarity === 'legendary' ? '✨ 传说' : title.rarity === 'epic' ? '🌟 史诗' : title.rarity === 'rare' ? '💎 稀有' : '🌱 普通'}
-                            </span>
-                          </div>
-                          {isUnlocked ? (
-                            isSelected ? (
-                              <div className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">已佩戴</div>
-                            ) : (
-                              <div className="bg-gray-200 text-gray-500 px-3 py-1 rounded-full text-xs font-black">点击佩戴</div>
-                            )
-                          ) : (
-                            <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
-                              <Lock size={12} />
-                              <span>未解锁</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Requirements hint */}
-                        {!isUnlocked && (
-                          <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
-                            解锁条件：{
-                              titleId === 'rookie' ? '初始赠送' :
-                              titleId === 'runner' ? '历史最高分达到 500' :
-                              titleId === 'jumper' ? '历史最高分达到 800' :
-                              titleId === 'explorer' ? '历史最高分达到 1,200' :
-                              titleId === 'expert' ? '历史最高分达到 2,000' :
-                              titleId === 'acrobat' ? '历史最高分达到 3,000' :
-                              titleId === 'survivor' ? '历史最高分达到 4,000' :
-                              titleId === 'treasure_hunter' ? '钻石数量达到 5,000' :
-                              titleId === 'wind_chaser' ? '历史最高分达到 6,000' :
-                              titleId === 'void_walker' ? '历史最高分达到 8,000' :
-                              titleId === 'neon_dreamer' ? '历史最高分达到 10,000' :
-                              titleId === 'speed_demon' ? '历史最高分达到 12,000' :
-                              titleId === 'shadow_ninja' ? '历史最高分达到 14,000' :
-                              titleId === 'star_gazer' ? '历史最高分达到 16,000' :
-                              titleId === 'time_traveler' ? '历史最高分达到 18,000' :
-                              titleId === 'dragon_rider' ? '历史最高分达到 20,000' :
-                              titleId === 'diamond_king' ? '钻石数量达到 50,000' :
-                              titleId === 'king' ? '获得排行榜第 1 名' :
-                              titleId === 'hdd_shadow' ? '历史最高分达到 30,000' :
-                              titleId === 'god_mode' ? '历史最高分达到 40,000' :
-                              titleId === 'galaxy_lord' ? '历史最高分达到 50,000' :
-                              titleId === 'immortal' ? '历史最高分达到 60,000' :
-                              titleId === 'cyber_punk' ? '历史最高分达到 70,000' :
-                              titleId === 'abyss_watcher' ? '历史最高分达到 80,000' :
-                              titleId === 'creator' ? '历史最高分达到 100,000' : '未知条件'
-                            }
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="w-full flex gap-2 mb-4">
+                <button 
+                  onClick={() => setHonorTab('titles')}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${honorTab === 'titles' ? 'bg-[#ffb300] text-white shadow-md' : 'bg-white/50 text-[#ffb300] hover:bg-white'}`}
+                >
+                  称号
+                </button>
+                <button 
+                  onClick={() => setHonorTab('frames')}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${honorTab === 'frames' ? 'bg-[#ffb300] text-white shadow-md' : 'bg-white/50 text-[#ffb300] hover:bg-white'}`}
+                >
+                  头像框
+                </button>
+                <button 
+                  onClick={() => setHonorTab('effects')}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${honorTab === 'effects' ? 'bg-[#ffb300] text-white shadow-md' : 'bg-white/50 text-[#ffb300] hover:bg-white'}`}
+                >
+                  进场特效
+                </button>
               </div>
 
-              <p className="text-[10px] text-gray-400 font-bold text-center">称号将在排行榜和个人资料中展示</p>
+              <div className="w-full bg-white/50 rounded-2xl p-4 mb-6 border-2 border-[#ffb300]/20">
+                {honorTab === 'titles' && (
+                  <>
+                    <p className="text-[#5d4037] font-bold text-center mb-4 italic">“真正的强者，不仅有实力，更有象征身份的称号。”</p>
+                    <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                      {(Object.keys(TITLES) as TitleId[]).map((titleId) => {
+                        const title = TITLES[titleId];
+                        const isUnlocked = unlockedTitles.includes(titleId);
+                        const isSelected = selectedTitle === titleId;
+
+                        return (
+                          <div 
+                            key={titleId}
+                            className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden ${
+                              isUnlocked 
+                                ? isSelected 
+                                  ? 'bg-white border-[#ffb300] shadow-md ring-2 ring-[#ffb300]/20' 
+                                  : 'bg-white border-gray-200 hover:border-[#ffb300]/50 cursor-pointer'
+                                : 'bg-gray-100 border-gray-200 opacity-60 grayscale'
+                            }`}
+                            onClick={() => isUnlocked && selectTitle(isSelected ? null : titleId)}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex flex-col">
+                                <span 
+                                  className={`text-lg font-black ${title.effect === 'pulse' ? 'animate-pulse' : title.effect === 'rotate' ? 'animate-spin' : title.effect === 'shake' ? 'animate-bounce' : ''}`}
+                                  style={{ 
+                                    color: title.color,
+                                    textShadow: title.shadow
+                                  }}
+                                >
+                                  {title.name}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                                  {title.rarity === 'legendary' ? '✨ 传说' : title.rarity === 'epic' ? '🌟 史诗' : title.rarity === 'rare' ? '💎 稀有' : '🌱 普通'}
+                                </span>
+                              </div>
+                              {isUnlocked ? (
+                                isSelected ? (
+                                  <div className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">已佩戴</div>
+                                ) : (
+                                  <div className="bg-gray-200 text-gray-500 px-3 py-1 rounded-full text-xs font-black">点击佩戴</div>
+                                )
+                              ) : (
+                                <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                                  <Lock size={12} />
+                                  <span>未解锁</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Requirements hint */}
+                            {!isUnlocked && (
+                              <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
+                                解锁条件：{
+                                  titleId === 'rookie' ? '初始赠送' :
+                                  titleId === 'runner' ? '历史最高分达到 500' :
+                                  titleId === 'jumper' ? '历史最高分达到 800' :
+                                  titleId === 'explorer' ? '历史最高分达到 1,200' :
+                                  titleId === 'expert' ? '历史最高分达到 2,000' :
+                                  titleId === 'acrobat' ? '历史最高分达到 3,000' :
+                                  titleId === 'survivor' ? '历史最高分达到 4,000' :
+                                  titleId === 'treasure_hunter' ? '钻石数量达到 5,000' :
+                                  titleId === 'wind_chaser' ? '历史最高分达到 6,000' :
+                                  titleId === 'void_walker' ? '历史最高分达到 8,000' :
+                                  titleId === 'neon_dreamer' ? '历史最高分达到 10,000' :
+                                  titleId === 'speed_demon' ? '历史最高分达到 12,000' :
+                                  titleId === 'shadow_ninja' ? '历史最高分达到 14,000' :
+                                  titleId === 'star_gazer' ? '历史最高分达到 16,000' :
+                                  titleId === 'time_traveler' ? '历史最高分达到 18,000' :
+                                  titleId === 'dragon_rider' ? '历史最高分达到 20,000' :
+                                  titleId === 'diamond_king' ? '钻石数量达到 50,000' :
+                                  titleId === 'king' ? '获得排行榜第 1 名' :
+                                  titleId === 'hdd_shadow' ? '历史最高分达到 30,000' :
+                                  titleId === 'god_mode' ? '历史最高分达到 40,000' :
+                                  titleId === 'galaxy_lord' ? '历史最高分达到 50,000' :
+                                  titleId === 'immortal' ? '历史最高分达到 60,000' :
+                                  titleId === 'cyber_punk' ? '历史最高分达到 70,000' :
+                                  titleId === 'abyss_watcher' ? '历史最高分达到 80,000' :
+                                  titleId === 'creator' ? '历史最高分达到 100,000' : 
+                                  titleId === 'rank_bronze' ? '排位赛达到青铜段位' :
+                                  titleId === 'rank_silver' ? '排位赛达到白银段位' :
+                                  titleId === 'rank_gold' ? '排位赛达到黄金段位' :
+                                  titleId === 'rank_platinum' ? '排位赛达到铂金段位' :
+                                  titleId === 'rank_diamond' ? '排位赛达到钻石段位' :
+                                  titleId === 'rank_star' ? '排位赛达到星耀段位' :
+                                  titleId === 'rank_king' ? '排位赛达到王者段位' : '未知条件'
+                                }
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {honorTab === 'frames' && (
+                  <>
+                    <p className="text-[#5d4037] font-bold text-center mb-4 italic">“华丽的头像框，彰显你的排位实力。”</p>
+                    <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                      {(Object.keys(AVATAR_FRAMES) as FrameId[]).map((frameId) => {
+                        const frame = AVATAR_FRAMES[frameId];
+                        const isUnlocked = unlockedFrames.includes(frameId);
+                        const isSelected = selectedFrame === frameId;
+
+                        return (
+                          <div 
+                            key={frameId}
+                            className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden flex items-center gap-4 ${
+                              isUnlocked 
+                                ? isSelected 
+                                  ? 'bg-white border-[#ffb300] shadow-md ring-2 ring-[#ffb300]/20' 
+                                  : 'bg-white border-gray-200 hover:border-[#ffb300]/50 cursor-pointer'
+                                : 'bg-gray-100 border-gray-200 opacity-60 grayscale'
+                            }`}
+                            onClick={() => isUnlocked && selectFrame(isSelected ? null : frameId)}
+                          >
+                            <AvatarWithFrame avatarId={avatarId} frameId={frameId} className="w-16 h-16" />
+                            <div className="flex-1 flex justify-between items-center">
+                              <div className="flex flex-col">
+                                <span className="text-lg font-black" style={{ color: frame.color }}>{frame.name}</span>
+                              </div>
+                              {isUnlocked ? (
+                                isSelected ? (
+                                  <div className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">已佩戴</div>
+                                ) : (
+                                  <div className="bg-gray-200 text-gray-500 px-3 py-1 rounded-full text-xs font-black">点击佩戴</div>
+                                )
+                              ) : (
+                                <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                                  <Lock size={12} />
+                                  <span>未解锁</span>
+                                </div>
+                              )}
+                            </div>
+                            {!isUnlocked && (
+                              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-0.5 rounded-lg w-11/12 text-center">
+                                解锁条件：{
+                                  frameId === 'gold_shield' ? '排位赛达到黄金段位' :
+                                  frameId === 'platinum_wings' ? '排位赛达到铂金段位' :
+                                  frameId === 'diamond_light' ? '排位赛达到钻石段位' :
+                                  frameId === 'star_glow' ? '排位赛达到星耀段位' :
+                                  frameId === 'king_wind' ? '排位赛达到王者段位' : '未知条件'
+                                }
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {honorTab === 'effects' && (
+                  <>
+                    <p className="text-[#5d4037] font-bold text-center mb-4 italic">“炫酷的进场特效，让你成为全场焦点。”</p>
+                    <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                      {(Object.keys(ENTRANCE_EFFECTS) as EntranceEffectId[]).map((effectId) => {
+                        const effect = ENTRANCE_EFFECTS[effectId];
+                        const isUnlocked = unlockedEntranceEffects.includes(effectId);
+                        const isSelected = selectedEntranceEffect === effectId;
+
+                        return (
+                          <div 
+                            key={effectId}
+                            className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden ${
+                              isUnlocked 
+                                ? isSelected 
+                                  ? 'bg-white border-[#ffb300] shadow-md ring-2 ring-[#ffb300]/20' 
+                                  : 'bg-white border-gray-200 hover:border-[#ffb300]/50 cursor-pointer'
+                                : 'bg-gray-100 border-gray-200 opacity-60 grayscale'
+                            }`}
+                            onClick={() => isUnlocked && selectEntranceEffect(isSelected ? null : effectId)}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex flex-col">
+                                <span className="text-lg font-black" style={{ color: effect.color }}>{effect.name}</span>
+                              </div>
+                              {isUnlocked ? (
+                                isSelected ? (
+                                  <div className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">已佩戴</div>
+                                ) : (
+                                  <div className="bg-gray-200 text-gray-500 px-3 py-1 rounded-full text-xs font-black">点击佩戴</div>
+                                )
+                              ) : (
+                                <div className="flex items-center gap-1 text-gray-400 text-xs font-bold">
+                                  <Lock size={12} />
+                                  <span>未解锁</span>
+                                </div>
+                              )}
+                            </div>
+                            {!isUnlocked && (
+                              <div className="mt-2 text-[10px] text-gray-500 font-bold bg-black/5 px-2 py-1 rounded-lg">
+                                解锁条件：{
+                                  effectId === 'flowing_light' ? '排位赛达到铂金段位' :
+                                  effectId === 'diamond_sparkle' ? '排位赛达到钻石段位' :
+                                  effectId === 'star_trek' ? '排位赛达到星耀段位' :
+                                  effectId === 'king_arrival' ? '排位赛达到王者段位' : '未知条件'
+                                }
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <p className="text-[10px] text-gray-400 font-bold text-center">
+                {honorTab === 'titles' ? '称号将在排行榜和个人资料中展示' : 
+                 honorTab === 'frames' ? '头像框将在排行榜和个人资料中展示' : 
+                 '进场特效将在对局开始时展示'}
+              </p>
             </motion.div>
           </div>
         )}
@@ -4224,76 +4645,225 @@ function GameContent() {
         <AnimatePresence>
           {rankChange && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: 50 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5, y: -50 }}
-              className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none overflow-hidden"
+              style={{
+                background: 'radial-gradient(circle at 50% 100%, #0c3366 0%, #051630 60%, #020813 100%)'
+              }}
             >
-              <div className="bg-black/80 backdrop-blur-md p-8 rounded-3xl border-4 border-[#ffb300] shadow-[0_0_50px_rgba(255,179,0,0.5)] flex flex-col items-center gap-6">
-                
-                {/* Score Change Animation */}
-                <div className="flex flex-col items-center">
-                  <h2 className="text-3xl font-black text-white mb-2 tracking-widest">排位结算</h2>
-                  <div className="flex items-center gap-4">
-                    <span className="text-4xl font-mono text-gray-300">{rankChange.currentRP}</span>
-                    <ChevronRight className="text-white animate-pulse" size={32} />
-                    <motion.span 
-                      initial={{ scale: 1 }}
-                      animate={{ scale: [1, 1.5, 1] }}
-                      transition={{ delay: 0.3, duration: 0.5 }}
-                      className={`text-5xl font-mono font-black ${rankChange.rpChange > 0 ? 'text-green-400' : rankChange.rpChange < 0 ? 'text-red-400' : 'text-yellow-400'}`}
-                      style={{ textShadow: `0 0 20px ${rankChange.rpChange > 0 ? '#4ade80' : rankChange.rpChange < 0 ? '#f87171' : '#facc15'}` }}
-                    >
-                      {rankChange.newRP}
-                    </motion.span>
-                  </div>
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 }}
-                    className={`mt-2 text-2xl font-black ${rankChange.rpChange > 0 ? 'text-green-400' : rankChange.rpChange < 0 ? 'text-red-400' : 'text-yellow-400'}`}
-                  >
-                    {rankChange.rpChange > 0 ? `+${rankChange.rpChange}` : rankChange.rpChange} 积分
-                  </motion.div>
-                </div>
+              {/* Vertical Light Pillar */}
+              <motion.div
+                initial={{ scaleY: 0, opacity: 0 }}
+                animate={{ scaleY: 1, opacity: 1 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="absolute bottom-0 w-[300px] h-[100vh] origin-bottom"
+                style={{
+                  background: 'linear-gradient(to top, rgba(74, 173, 255, 0.6) 0%, rgba(74, 173, 255, 0.1) 50%, transparent 100%)',
+                  filter: 'blur(30px)'
+                }}
+              />
+              <motion.div
+                initial={{ scaleY: 0, opacity: 0 }}
+                animate={{ scaleY: 1, opacity: 1 }}
+                transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
+                className="absolute bottom-0 w-[80px] h-[80vh] origin-bottom"
+                style={{
+                  background: 'linear-gradient(to top, rgba(255, 255, 255, 0.8) 0%, rgba(100, 200, 255, 0.3) 60%, transparent 100%)',
+                  filter: 'blur(10px)'
+                }}
+              />
 
-                {/* Rank Tier Change Animation (only if changed) */}
-                {rankChange.type !== 'same' && (
+              {/* Floating Particles */}
+              {[...Array(30)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute w-1 h-1 bg-white rounded-full"
+                  initial={{ 
+                    x: (Math.random() - 0.5) * window.innerWidth, 
+                    y: window.innerHeight / 2 + Math.random() * window.innerHeight / 2,
+                    opacity: Math.random() * 0.5 + 0.5,
+                    scale: Math.random() * 2 + 0.5
+                  }}
+                  animate={{ 
+                    y: -100,
+                    opacity: 0
+                  }}
+                  transition={{ 
+                    duration: Math.random() * 3 + 2,
+                    repeat: Infinity,
+                    delay: Math.random() * 2,
+                    ease: "linear"
+                  }}
+                  style={{
+                    boxShadow: '0 0 6px 2px rgba(100,200,255,0.8)'
+                  }}
+                />
+              ))}
+
+              <div className="relative z-10 flex flex-col items-center w-full h-full justify-center mt-[-10vh]">
+                {/* Header Text */}
+                <motion.div 
+                  initial={{ y: -30, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.5, duration: 0.6 }}
+                  className="absolute top-[15%] flex flex-col items-center text-center w-full"
+                >
+                  <h2 className="text-4xl md:text-5xl font-bold text-white tracking-widest drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 0 20px rgba(74,173,255,0.5)' }}>
+                    {rankChange.type === 'up' ? `恭喜您段位提升至${rankChange.to.name}` : 
+                     rankChange.type === 'down' ? `很遗憾段位降至${rankChange.to.name}` : 
+                     rankChange.rpChange > 0 ? '排位赛胜利' : 
+                     rankChange.rpChange < 0 ? '排位赛失败' : '排位赛平局'}
+                  </h2>
+                  <p className="text-lg md:text-xl text-blue-200 mt-4 tracking-widest opacity-80 font-light drop-shadow-[0_1px_5px_rgba(0,0,0,0.8)]">
+                    {rankChange.type === 'up' ? '荣耀加冕，实力见证' : 
+                     rankChange.type === 'down' ? '重整旗鼓，再创辉煌' : 
+                     rankChange.rpChange > 0 ? '稳扎稳打，步步高升' : 
+                     rankChange.rpChange < 0 ? '胜败乃兵家常事' : '势均力敌的较量'}
+                  </p>
+                </motion.div>
+
+                {/* Central Emblem */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0, y: 50 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8, type: "spring", damping: 15, stiffness: 100 }}
+                  className="relative flex items-center justify-center mt-20"
+                >
+                  {/* Glowing aura behind emblem */}
                   <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ delay: 1, duration: 0.5 }}
-                    className="flex flex-col items-center border-t-2 border-white/20 pt-6 mt-2 w-full"
+                    animate={{ 
+                      scale: [1, 1.1, 1],
+                      opacity: [0.6, 0.9, 0.6]
+                    }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute w-[350px] h-[350px] rounded-full"
+                    style={{
+                      background: `radial-gradient(circle, ${rankChange.to.color}60 0%, transparent 70%)`,
+                      filter: 'blur(25px)'
+                    }}
+                  />
+                  
+                  {/* Elaborate Border/Wings around the icon */}
+                  <div className="absolute w-[400px] h-[400px] flex items-center justify-center pointer-events-none z-20">
+                    <svg width="100%" height="100%" viewBox="0 0 400 400" className="absolute inset-0">
+                      <defs>
+                        <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                          <stop offset="100%" stopColor="#a0c4ff" stopOpacity="0.2" />
+                        </linearGradient>
+                        <linearGradient id="wingGradRight" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#a0c4ff" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.9" />
+                        </linearGradient>
+                        <filter id="glowWing" x="-20%" y="-20%" width="140%" height="140%">
+                          <feGaussianBlur stdDeviation="4" result="blur" />
+                          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                      </defs>
+                      
+                      {/* Left Wings */}
+                      <motion.g initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1, duration: 0.8, ease: "easeOut" }} filter="url(#glowWing)">
+                        <path d="M 120 150 Q 60 120 20 160 Q 70 180 100 180 Z" fill="url(#wingGrad)" />
+                        <path d="M 110 180 Q 40 170 10 210 Q 60 220 95 210 Z" fill="url(#wingGrad)" />
+                        <path d="M 115 210 Q 50 220 30 260 Q 80 250 110 230 Z" fill="url(#wingGrad)" />
+                      </motion.g>
+                      
+                      {/* Right Wings */}
+                      <motion.g initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1, duration: 0.8, ease: "easeOut" }} filter="url(#glowWing)">
+                        <path d="M 280 150 Q 340 120 380 160 Q 330 180 300 180 Z" fill="url(#wingGradRight)" />
+                        <path d="M 290 180 Q 360 170 390 210 Q 340 220 305 210 Z" fill="url(#wingGradRight)" />
+                        <path d="M 285 210 Q 350 220 370 260 Q 320 250 290 230 Z" fill="url(#wingGradRight)" />
+                      </motion.g>
+
+                      {/* Top Gem */}
+                      <motion.g initial={{ opacity: 0, y: 20, scale: 0 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 1.2, type: "spring" }}>
+                        <circle cx="200" cy="70" r="15" fill="#ff3366" filter="url(#glowWing)" />
+                        <circle cx="200" cy="70" r="8" fill="#ffffff" />
+                        <path d="M 180 80 Q 200 100 220 80 Q 200 60 180 80 Z" fill="#ffd700" />
+                      </motion.g>
+
+                      {/* Bottom Gem */}
+                      <motion.g initial={{ opacity: 0, y: -20, scale: 0 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 1.3, type: "spring" }}>
+                        <polygon points="200,310 220,330 200,360 180,330" fill="#a0c4ff" filter="url(#glowWing)" />
+                        <polygon points="200,315 210,330 200,345 190,330" fill="#ffffff" />
+                      </motion.g>
+                    </svg>
+                  </div>
+
+                  {/* The Emblem itself */}
+                  <div className="relative z-10 w-[220px] h-[220px] bg-gradient-to-br from-[#800000] to-[#cc0000] rounded-full border-[6px] flex items-center justify-center shadow-[inset_0_0_40px_rgba(0,0,0,0.6),0_0_30px_rgba(0,0,0,0.8)]" style={{ borderColor: '#ffd700' }}>
+                    <div className="absolute inset-0 rounded-full border-2 border-white/30 m-1" />
+                    <span className="text-[110px] drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]" style={{ color: rankChange.to.color }}>
+                      {rankChange.to.icon}
+                    </span>
+                  </div>
+                  
+                  {/* RP Change Badge */}
+                  <motion.div 
+                    initial={{ scale: 0, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    transition={{ delay: 1.5, type: "spring" }}
+                    className="absolute -bottom-10 bg-gradient-to-b from-[#1a2a40] to-[#0a1526] border border-[#4aadff]/50 px-8 py-2 rounded-full flex items-center gap-4 shadow-[0_0_20px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.2)] z-30"
                   >
-                    <motion.div
-                      initial={{ rotate: -10 }}
-                      animate={{ rotate: 10 }}
-                      transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.5 }}
-                      className="text-6xl mb-2"
-                    >
-                      {rankChange.type === 'up' ? '🎊' : '📉'}
-                    </motion.div>
-                    <h2 className={`text-3xl font-black ${rankChange.type === 'up' ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {rankChange.type === 'up' ? '段位升级！' : '段位下降'}
-                    </h2>
-                    <div className="flex items-center gap-6 mt-4">
-                      <div className="flex flex-col items-center gap-2 opacity-60">
-                        <span className="text-4xl">{rankChange.from.icon}</span>
-                        <span className="text-white font-bold">{rankChange.from.name}</span>
-                      </div>
-                      <ChevronRight className="text-white" size={32} />
-                      <motion.div 
-                        initial={{ scale: 1 }}
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ delay: 1.5, duration: 0.5 }}
-                        className="flex flex-col items-center gap-2"
-                      >
-                        <span className="text-6xl drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">{rankChange.to.icon}</span>
-                        <span className="text-white text-2xl font-black" style={{ color: rankChange.to.color }}>{rankChange.to.name}</span>
-                      </motion.div>
-                    </div>
+                    <span className="text-gray-300 font-mono text-xl">{rankChange.currentRP}</span>
+                    <span className={`font-black text-3xl ${rankChange.rpChange > 0 ? 'text-[#4ade80]' : rankChange.rpChange < 0 ? 'text-[#f87171]' : 'text-gray-400'} drop-shadow-[0_0_8px_currentColor]`}>
+                      {rankChange.rpChange > 0 ? `+${rankChange.rpChange}` : rankChange.rpChange}
+                    </span>
+                    <span className="text-white font-mono font-bold text-2xl drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{rankChange.newRP}</span>
                   </motion.div>
-                )}
+                </motion.div>
+
+                {/* Floating Avatars/Decorations around the emblem */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 1.2, duration: 0.8, type: "spring" }}
+                  className="absolute ml-[-320px] mt-[-120px] flex flex-col items-center"
+                >
+                  <motion.div 
+                    animate={{ y: [-10, 10, -10] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    className="w-24 h-24 rounded-full bg-gradient-to-br from-[#1a2a40] to-[#0a1526] border-[3px] border-[#ffd700] flex items-center justify-center text-5xl shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_15px_rgba(255,255,255,0.1)] relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent" />
+                    {rankChange.type !== 'same' ? rankChange.from.icon : '⭐'}
+                  </motion.div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 1.4, duration: 0.8, type: "spring" }}
+                  className="absolute mr-[-350px] mt-[80px] flex flex-col items-center"
+                >
+                  <motion.div 
+                    animate={{ y: [10, -10, 10] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                    className="w-20 h-20 rounded-full bg-gradient-to-br from-[#1a2a40] to-[#0a1526] border-[3px] border-[#a0c4ff] flex items-center justify-center text-4xl shadow-[0_0_20px_rgba(160,196,255,0.3),inset_0_0_15px_rgba(255,255,255,0.1)] relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent" />
+                    🏆
+                  </motion.div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 1.6, duration: 0.8, type: "spring" }}
+                  className="absolute ml-[-220px] mt-[280px] flex flex-col items-center"
+                >
+                  <motion.div 
+                    animate={{ y: [-8, 8, -8] }}
+                    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                    className="w-28 h-28 rounded-full bg-gradient-to-br from-[#1a2a40] to-[#0a1526] border-[3px] border-[#c0c0c0] flex items-center justify-center text-6xl shadow-[0_0_20px_rgba(192,192,192,0.3),inset_0_0_15px_rgba(255,255,255,0.1)] relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent" />
+                    💎
+                  </motion.div>
+                </motion.div>
+
               </div>
             </motion.div>
           )}
@@ -4512,12 +5082,12 @@ function GameContent() {
                 <div className="flex items-center gap-2">
                   {/* Player Profile Section */}
                   <div className="flex items-center gap-2 bg-black/20 p-1 pr-4 rounded-xl border border-white/10 backdrop-blur-sm">
-                    <div 
-                      className="w-16 h-16 rounded-lg border-2 border-yellow-500/50 overflow-hidden bg-[#f5e6c4] shadow-lg shrink-0 relative cursor-pointer"
-                      onClick={() => user && setShowAvatarSelect(true)}
-                    >
-                      <img src={getCharacterImage(avatarId)} alt="avatar" className="w-full h-full object-contain" />
-                    </div>
+                    <AvatarWithFrame 
+                      avatarId={avatarId} 
+                      frameId={selectedFrame} 
+                      className="w-16 h-16 shadow-lg" 
+                      onClick={() => user && setShowAvatarSelect(true)} 
+                    />
                     <div className="flex flex-col justify-center">
                       <div className="flex items-center gap-2">
                         <span className="text-white font-black text-sm drop-shadow-md">
@@ -4535,6 +5105,18 @@ function GameContent() {
                           }}
                         >
                           {TITLES[selectedTitle].name}
+                        </span>
+                      )}
+                      {selectedEntranceEffect && ENTRANCE_EFFECTS[selectedEntranceEffect] && (
+                        <span 
+                          className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm inline-block w-fit mt-0.5"
+                          style={{ 
+                            color: ENTRANCE_EFFECTS[selectedEntranceEffect].color,
+                            backgroundColor: `${ENTRANCE_EFFECTS[selectedEntranceEffect].color}15`,
+                            borderLeft: `2px solid ${ENTRANCE_EFFECTS[selectedEntranceEffect].color}`
+                          }}
+                        >
+                          ✨ {ENTRANCE_EFFECTS[selectedEntranceEffect].name}
                         </span>
                       )}
                       {user && (
@@ -5201,43 +5783,56 @@ function GameContent() {
                                 }`}>
                                   {i + 1}
                                 </span>
-                                <div className={`w-12 h-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 shadow-inner ${
-                                  i === 0 ? 'border-yellow-400 ring-4 ring-yellow-200' : 
-                                  i === 1 ? 'border-gray-300 ring-4 ring-gray-100' : 
-                                  i === 2 ? 'border-orange-400 ring-4 ring-orange-100' : 'border-gray-100'
-                                }`}>
-                                  <img 
-                                    src={getCharacterImage(entry.avatarId || 'hdd')} 
-                                    alt={entry.name} 
-                                    className="w-full h-full object-contain"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                </div>
+                                <AvatarWithFrame 
+                                  avatarId={entry.avatarId || 'hdd'} 
+                                  frameId={entry.frameId} 
+                                  className={`w-12 h-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-gray-50 shadow-inner ${
+                                    i === 0 ? 'border-yellow-400 ring-4 ring-yellow-200' : 
+                                    i === 1 ? 'border-gray-300 ring-4 ring-gray-100' : 
+                                    i === 2 ? 'border-orange-400 ring-4 ring-orange-100' : 'border-gray-100'
+                                  }`} 
+                                />
                               </div>
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1">
                                   <span className={`font-black text-[#5d4037] truncate ${i === 0 ? 'text-lg' : 'text-base'} max-w-[100px]`}>{entry.name}</span>
                                   {i < 3 && <Star className={`w-3 h-3 ${i === 0 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />}
                                 </div>
-                                {entry.titleId && TITLES[entry.titleId] && (
-                                  <div className="h-5 flex items-center">
-                                    <span 
-                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit origin-center ${
-                                        TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : 
-                                        TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : 
-                                        TITLES[entry.titleId].effect === 'shake' ? 'animate-bounce' : ''
-                                      }`}
-                                      style={{ 
-                                        color: TITLES[entry.titleId].color, 
-                                        backgroundColor: `${TITLES[entry.titleId].color}20`,
-                                        textShadow: TITLES[entry.titleId].shadow,
-                                        border: `1px solid ${TITLES[entry.titleId].color}40`
-                                      }}
-                                    >
-                                      {TITLES[entry.titleId].name}
-                                    </span>
-                                  </div>
-                                )}
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                  {entry.titleId && TITLES[entry.titleId] && (
+                                    <div className="h-5 flex items-center">
+                                      <span 
+                                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit origin-center ${
+                                          TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : 
+                                          TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : 
+                                          TITLES[entry.titleId].effect === 'shake' ? 'animate-bounce' : ''
+                                        }`}
+                                        style={{ 
+                                          color: TITLES[entry.titleId].color, 
+                                          backgroundColor: `${TITLES[entry.titleId].color}20`,
+                                          textShadow: TITLES[entry.titleId].shadow,
+                                          border: `1px solid ${TITLES[entry.titleId].color}40`
+                                        }}
+                                      >
+                                        {TITLES[entry.titleId].name}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {entry.entranceEffectId && ENTRANCE_EFFECTS[entry.entranceEffectId] && (
+                                    <div className="h-4 flex items-center">
+                                      <span 
+                                        className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm inline-block w-fit"
+                                        style={{ 
+                                          color: ENTRANCE_EFFECTS[entry.entranceEffectId].color,
+                                          backgroundColor: `${ENTRANCE_EFFECTS[entry.entranceEffectId].color}15`,
+                                          borderLeft: `2px solid ${ENTRANCE_EFFECTS[entry.entranceEffectId].color}`
+                                        }}
+                                      >
+                                        ✨ {ENTRANCE_EFFECTS[entry.entranceEffectId].name}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex flex-col items-end">
