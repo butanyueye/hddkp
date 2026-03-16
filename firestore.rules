@@ -80,7 +80,7 @@ service cloud.firestore {
              data.timestamp is timestamp;
     }
 
-    function isValidUserStats(data) {
+    function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
              hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate']) &&
              validStringLength('userId', 1, 100) &&
@@ -91,6 +91,28 @@ service cloud.firestore {
              isPositiveNumber('diamonds') &&
              isValidInventoryMap(data.inventory) &&
              isValidList('achievements', 100) &&
+             (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
+             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
+             (!('friends' in data) || isValidList('friends', 1000)) &&
+             (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
+             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
+             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
+             (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
+             (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
+             (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&
+             (!('lastRankedWinDate' in data) || validStringLength('lastRankedWinDate', 0, 20));
+    }
+
+    function isValidUserStatsUpdate(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate']) &&
+             (!('userId' in data) || validStringLength('userId', 1, 100)) &&
+             (!('name' in data) || validStringLength('name', 0, 100)) &&
+             (!('email' in data) || validStringLength('email', 0, 100)) &&
+             (!('highScore' in data) || isPositiveNumber('highScore')) &&
+             (!('totalGames' in data) || isPositiveNumber('totalGames')) &&
+             (!('diamonds' in data) || isPositiveNumber('diamonds')) &&
+             (!('inventory' in data) || isValidInventoryMap(data.inventory)) &&
+             (!('achievements' in data) || isValidList('achievements', 100)) &&
              (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
              (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
              (!('friends' in data) || isValidList('friends', 1000)) &&
@@ -145,7 +167,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name == 'hdd' ||
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name == 'hdd') ||
          (request.auth.token.email == "butanyueye@gmail.com" && request.auth.token.email_verified == true));
     }
 
@@ -165,11 +187,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Only the owner can create their own stats
       allow create: if isOwner(userId) && 
-                       isValidUserStats(request.resource.data) && 
+                       isValidUserStatsCreate(request.resource.data) && 
                        uidUnchanged();
       // Only the owner can update their own stats
       allow update: if isOwner(userId) && 
-                       isValidUserStats(request.resource.data) && 
+                       isValidUserStatsUpdate(request.resource.data) && 
                        uidNotModified();
       allow delete: if isOwner(userId);
     }

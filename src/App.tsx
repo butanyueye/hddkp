@@ -753,11 +753,11 @@ function GameContent() {
 
               // Migration for existing users
               if (!('rankPoints' in data)) {
-                updateDoc(doc(db, 'users', u.uid), {
+              setDoc(doc(db, 'users', u.uid), {
                   rankPoints: 1000,
                   rankedWins: 0,
                   rankedTotal: 0
-                }).catch(err => console.error("Migration error:", err));
+                }, { merge: true }).catch(err => console.error("Migration error:", err));
               }
             } else {
               // Initialize user doc
