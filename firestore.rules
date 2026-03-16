@@ -71,18 +71,20 @@ service cloud.firestore {
     
     function isValidLeaderboardEntry(data) {
       return hasRequiredFields(['userId', 'name', 'score', 'timestamp']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId', 'titleId']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId', 'titleId', 'frameId', 'entranceEffectId']) &&
              validStringLength('userId', 1, 100) &&
              validStringLength('name', 1, 50) &&
              isPositiveNumber('score') &&
              (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
-             (!('titleId' in data) || validStringLength('titleId', 1, 50)) &&
+             (!('titleId' in data) || data.titleId == null || validStringLength('titleId', 1, 50)) &&
+             (!('frameId' in data) || data.frameId == null || validStringLength('frameId', 1, 50)) &&
+             (!('entranceEffectId' in data) || data.entranceEffectId == null || validStringLength('entranceEffectId', 1, 50)) &&
              data.timestamp is timestamp;
     }
 
     function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
              validStringLength('userId', 1, 100) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -97,6 +99,10 @@ service cloud.firestore {
              (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
              (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
+             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength('selectedFrame', 1, 50)) &&
+             (!('unlockedFrames' in data) || isValidList('unlockedFrames', 20)) &&
+             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength('selectedEntranceEffect', 1, 50)) &&
+             (!('unlockedEntranceEffects' in data) || isValidList('unlockedEntranceEffects', 20)) &&
              (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&
@@ -104,7 +110,7 @@ service cloud.firestore {
     }
 
     function isValidUserStatsUpdate(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
              (!('userId' in data) || validStringLength('userId', 1, 100)) &&
              (!('name' in data) || validStringLength('name', 0, 100)) &&
              (!('email' in data) || validStringLength('email', 0, 100)) &&
@@ -119,6 +125,10 @@ service cloud.firestore {
              (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
              (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
+             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength('selectedFrame', 1, 50)) &&
+             (!('unlockedFrames' in data) || isValidList('unlockedFrames', 20)) &&
+             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength('selectedEntranceEffect', 1, 50)) &&
+             (!('unlockedEntranceEffects' in data) || isValidList('unlockedEntranceEffects', 20)) &&
              (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&

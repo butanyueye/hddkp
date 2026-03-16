@@ -1859,6 +1859,8 @@ function GameContent() {
           score: finalScore,
           avatarId: avatarId,
           titleId: selectedTitle,
+          frameId: selectedFrame,
+          entranceEffectId: selectedEntranceEffect,
           timestamp: serverTimestamp()
         });
       } else {

@@ -10,7 +10,9 @@
         "score": { "type": "integer", "description": "The high score achieved" },
         "timestamp": { "type": "string", "format": "date-time", "description": "When the score was achieved" },
         "avatarId": { "type": "string", "description": "The ID of the character avatar" },
-        "titleId": { "type": "string", "description": "The ID of the equipped title" }
+        "titleId": { "type": "string", "description": "The ID of the equipped title" },
+        "frameId": { "type": "string", "description": "The ID of the equipped avatar frame" },
+        "entranceEffectId": { "type": "string", "description": "The ID of the equipped entrance effect" }
       },
       "required": ["userId", "name", "score", "timestamp"]
     },
@@ -38,7 +40,15 @@
         "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked achievements" },
         "unlockedCharacters": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked character IDs" },
         "selectedTitle": { "type": "string", "description": "The ID of the currently selected title" },
-        "unlockedTitles": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked title IDs" }
+        "unlockedTitles": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked title IDs" },
+        "selectedFrame": { "type": "string", "description": "The ID of the currently selected avatar frame" },
+        "unlockedFrames": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked avatar frame IDs" },
+        "selectedEntranceEffect": { "type": "string", "description": "The ID of the currently selected entrance effect" },
+        "unlockedEntranceEffects": { "type": "array", "items": { "type": "string" }, "description": "List of unlocked entrance effect IDs" },
+        "rankPoints": { "type": "integer", "description": "The user's rank points" },
+        "rankedWins": { "type": "integer", "description": "The user's ranked wins" },
+        "rankedTotal": { "type": "integer", "description": "The user's total ranked games" },
+        "lastRankedWinDate": { "type": "string", "description": "The date of the user's last ranked win" }
       },
       "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory", "unlockedCharacters"]
     },
