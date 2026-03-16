@@ -139,20 +139,20 @@ const TITLES = {
 type TitleId = keyof typeof TITLES;
 
 const AVATAR_FRAMES = {
-  'gold_shield': { name: '黄金之盾', color: '#ffd700', effect: 'none', border: '4px solid #ffd700', shadow: '0 0 10px #ffd700' },
-  'platinum_wings': { name: '铂金之翼', color: '#00e5ff', effect: 'glow', border: '4px solid #00e5ff', shadow: '0 0 15px #00e5ff' },
-  'diamond_light': { name: '钻石之光', color: '#b388ff', effect: 'pulse', border: '4px dashed #b388ff', shadow: '0 0 20px #b388ff' },
-  'star_glow': { name: '星耀之芒', color: '#ff4081', effect: 'rotate', border: '4px dotted #ff4081', shadow: '0 0 25px #ff4081' },
-  'king_wind': { name: '王者之风', color: '#ff1744', effect: 'shake', border: '4px double #ff1744', shadow: '0 0 30px #ff1744' },
+  'gold_shield': { name: '至尊金盾', color: '#f59e0b', effect: 'none', border: '4px solid #f59e0b', shadow: '0 0 15px rgba(245, 158, 11, 0.6)' },
+  'platinum_wings': { name: '幻影之翼', color: '#06b6d4', effect: 'glow', border: '4px solid #06b6d4', shadow: '0 0 20px rgba(6, 182, 212, 0.7)' },
+  'diamond_light': { name: '星钻之光', color: '#8b5cf6', effect: 'pulse', border: '4px solid #8b5cf6', shadow: '0 0 25px rgba(139, 92, 246, 0.8)' },
+  'star_glow': { name: '极光之芒', color: '#ec4899', effect: 'rotate', border: '4px solid #ec4899', shadow: '0 0 30px rgba(236, 72, 153, 0.9)' },
+  'king_wind': { name: '苍穹之巅', color: '#ef4444', effect: 'shake', border: '4px solid #ef4444', shadow: '0 0 35px rgba(239, 68, 68, 1)' },
 };
 
 type FrameId = keyof typeof AVATAR_FRAMES;
 
 const ENTRANCE_EFFECTS = {
-  'flowing_light': { name: '流光溢彩', color: '#00e5ff', type: 'flash' },
-  'diamond_sparkle': { name: '碎钻闪耀', color: '#b388ff', type: 'sparkle' },
-  'star_trek': { name: '星际迷航', color: '#ff4081', type: 'warp' },
-  'king_arrival': { name: '君临天下', color: '#ff1744', type: 'screen_shake' },
+  'flowing_light': { name: '霓虹流光', color: '#06b6d4', type: 'flash' },
+  'diamond_sparkle': { name: '星辰碎钻', color: '#8b5cf6', type: 'sparkle' },
+  'star_trek': { name: '时空跃迁', color: '#ec4899', type: 'warp' },
+  'king_arrival': { name: '神迹降临', color: '#ef4444', type: 'screen_shake' },
 };
 
 type EntranceEffectId = keyof typeof ENTRANCE_EFFECTS;

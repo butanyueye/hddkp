@@ -44,18 +44,18 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly(fields);
     }
 
-    function validStringLength(field, minLen, maxLen) {
-      return request.resource.data[field] is string && 
-             request.resource.data[field].size() >= minLen && 
-             request.resource.data[field].size() <= maxLen;
+    function validStringLength(data, field, minLen, maxLen) {
+      return data[field] is string && 
+             data[field].size() >= minLen && 
+             data[field].size() <= maxLen;
     }
 
-    function isPositiveNumber(field) {
-      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    function isPositiveNumber(data, field) {
+      return data[field] is number && data[field] >= 0;
     }
 
-    function isValidList(listField, maxSize) {
-      return request.resource.data[listField] is list && request.resource.data[listField].size() <= maxSize;
+    function isValidList(data, listField, maxSize) {
+      return data[listField] is list && data[listField].size() <= maxSize;
     }
 
     function isValidInventoryMap(mapData) {
@@ -72,75 +72,75 @@ service cloud.firestore {
     function isValidLeaderboardEntry(data) {
       return hasRequiredFields(['userId', 'name', 'score', 'timestamp']) &&
              hasOnlyAllowedFields(['userId', 'name', 'score', 'timestamp', 'avatarId', 'titleId', 'frameId', 'entranceEffectId']) &&
-             validStringLength('userId', 1, 100) &&
-             validStringLength('name', 1, 50) &&
-             isPositiveNumber('score') &&
-             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
-             (!('titleId' in data) || data.titleId == null || validStringLength('titleId', 1, 50)) &&
-             (!('frameId' in data) || data.frameId == null || validStringLength('frameId', 1, 50)) &&
-             (!('entranceEffectId' in data) || data.entranceEffectId == null || validStringLength('entranceEffectId', 1, 50)) &&
+             validStringLength(data, 'userId', 1, 100) &&
+             validStringLength(data, 'name', 1, 50) &&
+             isPositiveNumber(data, 'score') &&
+             (!('avatarId' in data) || validStringLength(data, 'avatarId', 1, 50)) &&
+             (!('titleId' in data) || data.titleId == null || validStringLength(data, 'titleId', 1, 50)) &&
+             (!('frameId' in data) || data.frameId == null || validStringLength(data, 'frameId', 1, 50)) &&
+             (!('entranceEffectId' in data) || data.entranceEffectId == null || validStringLength(data, 'entranceEffectId', 1, 50)) &&
              data.timestamp is timestamp;
     }
 
     function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
              hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
-             validStringLength('userId', 1, 100) &&
-             (!('name' in data) || validStringLength('name', 0, 100)) &&
-             (!('email' in data) || validStringLength('email', 0, 100)) &&
-             isPositiveNumber('highScore') &&
-             isPositiveNumber('totalGames') &&
-             isPositiveNumber('diamonds') &&
+             validStringLength(data, 'userId', 1, 100) &&
+             (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
+             (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
+             isPositiveNumber(data, 'highScore') &&
+             isPositiveNumber(data, 'totalGames') &&
+             isPositiveNumber(data, 'diamonds') &&
              isValidInventoryMap(data.inventory) &&
-             isValidList('achievements', 100) &&
-             (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
-             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
-             (!('friends' in data) || isValidList('friends', 1000)) &&
-             (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
-             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
-             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
-             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength('selectedFrame', 1, 50)) &&
-             (!('unlockedFrames' in data) || isValidList('unlockedFrames', 20)) &&
-             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength('selectedEntranceEffect', 1, 50)) &&
-             (!('unlockedEntranceEffects' in data) || isValidList('unlockedEntranceEffects', 20)) &&
-             (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
-             (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
-             (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength('lastRankedWinDate', 0, 20));
+             isValidList(data, 'achievements', 100) &&
+             (!('unlockedCharacters' in data) || isValidList(data, 'unlockedCharacters', 10)) &&
+             (!('avatarId' in data) || validStringLength(data, 'avatarId', 1, 50)) &&
+             (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
+             (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
+             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
+             (!('unlockedTitles' in data) || isValidList(data, 'unlockedTitles', 20)) &&
+             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength(data, 'selectedFrame', 1, 50)) &&
+             (!('unlockedFrames' in data) || isValidList(data, 'unlockedFrames', 20)) &&
+             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength(data, 'selectedEntranceEffect', 1, 50)) &&
+             (!('unlockedEntranceEffects' in data) || isValidList(data, 'unlockedEntranceEffects', 20)) &&
+             (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
+             (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
+             (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
+             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20));
     }
 
     function isValidUserStatsUpdate(data) {
       return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
-             (!('userId' in data) || validStringLength('userId', 1, 100)) &&
-             (!('name' in data) || validStringLength('name', 0, 100)) &&
-             (!('email' in data) || validStringLength('email', 0, 100)) &&
-             (!('highScore' in data) || isPositiveNumber('highScore')) &&
-             (!('totalGames' in data) || isPositiveNumber('totalGames')) &&
-             (!('diamonds' in data) || isPositiveNumber('diamonds')) &&
+             (!('userId' in data) || validStringLength(data, 'userId', 1, 100)) &&
+             (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
+             (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
+             (!('highScore' in data) || isPositiveNumber(data, 'highScore')) &&
+             (!('totalGames' in data) || isPositiveNumber(data, 'totalGames')) &&
+             (!('diamonds' in data) || isPositiveNumber(data, 'diamonds')) &&
              (!('inventory' in data) || isValidInventoryMap(data.inventory)) &&
-             (!('achievements' in data) || isValidList('achievements', 100)) &&
-             (!('unlockedCharacters' in data) || isValidList('unlockedCharacters', 10)) &&
-             (!('avatarId' in data) || validStringLength('avatarId', 1, 50)) &&
-             (!('friends' in data) || isValidList('friends', 1000)) &&
-             (!('hgteFragments' in data) || isPositiveNumber('hgteFragments')) &&
-             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength('selectedTitle', 1, 50)) &&
-             (!('unlockedTitles' in data) || isValidList('unlockedTitles', 20)) &&
-             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength('selectedFrame', 1, 50)) &&
-             (!('unlockedFrames' in data) || isValidList('unlockedFrames', 20)) &&
-             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength('selectedEntranceEffect', 1, 50)) &&
-             (!('unlockedEntranceEffects' in data) || isValidList('unlockedEntranceEffects', 20)) &&
-             (!('rankPoints' in data) || isPositiveNumber('rankPoints')) &&
-             (!('rankedWins' in data) || isPositiveNumber('rankedWins')) &&
-             (!('rankedTotal' in data) || isPositiveNumber('rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength('lastRankedWinDate', 0, 20));
+             (!('achievements' in data) || isValidList(data, 'achievements', 100)) &&
+             (!('unlockedCharacters' in data) || isValidList(data, 'unlockedCharacters', 10)) &&
+             (!('avatarId' in data) || validStringLength(data, 'avatarId', 1, 50)) &&
+             (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
+             (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
+             (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
+             (!('unlockedTitles' in data) || isValidList(data, 'unlockedTitles', 20)) &&
+             (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength(data, 'selectedFrame', 1, 50)) &&
+             (!('unlockedFrames' in data) || isValidList(data, 'unlockedFrames', 20)) &&
+             (!('selectedEntranceEffect' in data) || data.selectedEntranceEffect == null || validStringLength(data, 'selectedEntranceEffect', 1, 50)) &&
+             (!('unlockedEntranceEffects' in data) || isValidList(data, 'unlockedEntranceEffects', 20)) &&
+             (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
+             (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
+             (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
+             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20));
     }
 
     function isValidCheckIn(data) {
       return hasRequiredFields(['lastCheckIn', 'checkInCount']) &&
              hasOnlyAllowedFields(['userId', 'lastCheckIn', 'checkInCount']) &&
-             (!('userId' in data) || validStringLength('userId', 1, 100)) &&
+             (!('userId' in data) || validStringLength(data, 'userId', 1, 100)) &&
              data.lastCheckIn is timestamp &&
-             isPositiveNumber('checkInCount');
+             isPositiveNumber(data, 'checkInCount');
     }
 
     function isValidPlayerObj(player) {
