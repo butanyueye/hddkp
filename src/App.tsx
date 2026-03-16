@@ -698,7 +698,7 @@ function GameContent() {
   // Friends & Custom Rooms state
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [friends, setFriends] = useState<string[]>([]);
-  const [rankChange, setRankChange] = useState<{from: any, to: any, type: 'up' | 'down'} | null>(null);
+  const [rankChange, setRankChange] = useState<{from: any, to: any, type: 'up' | 'down' | 'same', rpChange: number, currentRP: number, newRP: number} | null>(null);
 
   const isModalOpen = showHonorModal || showRankedModal || showAvatarSelect || showCharSelect || 
                       showCheckInModal || showGachaResultModal || showInventoryModal || 
@@ -882,6 +882,7 @@ function GameContent() {
     const scoreQuery = query(collection(db, 'leaderboard'), orderBy('score', 'desc'), limit(10));
     const unsubscribeScore = onSnapshot(scoreQuery, (snapshot) => {
       const entries = snapshot.docs.map(doc => ({
+        userId: doc.id,
         name: doc.data().name,
         score: doc.data().score,
         avatarId: doc.data().avatarId,
@@ -898,6 +899,7 @@ function GameContent() {
       const entries = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
+          userId: doc.id,
           name: data.name || '匿名玩家',
           rankPoints: typeof data.rankPoints === 'number' ? data.rankPoints : 1000,
           rankedWins: data.rankedWins || 0,
@@ -1640,14 +1642,14 @@ function GameContent() {
     }
   }, [isMultiplayer, matchId, user]);
 
-  const updateRankPoints = useCallback(async (result: 'win' | 'lose' | 'draw') => {
-    console.log("updateRankPoints called", { result, matchType, user: user?.uid });
-    if (!user || matchType !== 'ranked') return;
+  const updateRankPoints = useCallback(async (result: 'win' | 'lose' | 'draw', currentMatchType: string) => {
+    console.log("updateRankPoints called", { result, currentMatchType, user: user?.uid });
+    if (!user || currentMatchType !== 'ranked') return;
     try {
       const userRef = doc(db, 'users', user.uid);
       
       let toastMsg = '';
-      let rankUpOrDown: {from: any, to: any, type: 'up' | 'down'} | null = null;
+      let rankUpOrDown: {from: any, to: any, type: 'up' | 'down' | 'same', rpChange: number, currentRP: number, newRP: number} | null = null;
 
       await runTransaction(db, async (transaction) => {
         const userDoc = await transaction.get(userRef);
@@ -1686,13 +1688,14 @@ function GameContent() {
         currentDiamonds += diamondReward;
         
         const newRank = getRankInfo(currentRP);
-        if (newRank.name !== oldRank.name) {
-          rankUpOrDown = {
-            from: oldRank,
-            to: newRank,
-            type: currentRP > (data.rankPoints || 1000) ? 'up' : 'down'
-          };
-        }
+        rankUpOrDown = {
+          from: oldRank,
+          to: newRank,
+          type: newRank.name !== oldRank.name ? (currentRP > (data.rankPoints || 1000) ? 'up' : 'down') : 'same',
+          rpChange: rpChange,
+          currentRP: data.rankPoints || 1000,
+          newRP: currentRP
+        };
 
         transaction.update(userRef, {
           rankPoints: currentRP,
@@ -1716,7 +1719,7 @@ function GameContent() {
     } catch (e) {
       console.error("Failed to update rank points", e);
     }
-  }, [user, matchType]);
+  }, [user]);
 
   const updateLeaderboard = useCallback(async (finalScore: number) => {
     if (!user) {
@@ -1901,13 +1904,13 @@ function GameContent() {
           matchStateRef.current = 'finished';
           if (data.winner === user.uid) {
             setMatchResult('win');
-            updateRankPoints('win');
+            updateRankPoints('win', data.matchType);
           } else if (data.winner === 'draw') {
             setMatchResult('draw');
-            updateRankPoints('draw');
+            updateRankPoints('draw', data.matchType);
           } else {
             setMatchResult('lose');
-            updateRankPoints('lose');
+            updateRankPoints('lose', data.matchType);
           }
         }
       } else {
@@ -2739,8 +2742,12 @@ function GameContent() {
         } else if (boss.phase === 'fighting') {
           // Hover movement
           boss.y += boss.vy * dt;
-          if (boss.y < groundY - 300 || boss.y > groundY - 100) {
-            boss.vy *= -1;
+          if (boss.y < groundY - 300) {
+            boss.y = groundY - 300;
+            boss.vy = Math.abs(boss.vy);
+          } else if (boss.y > groundY - 100) {
+            boss.y = groundY - 100;
+            boss.vy = -Math.abs(boss.vy);
           }
 
           // Attack
@@ -4222,34 +4229,71 @@ function GameContent() {
               exit={{ opacity: 0, scale: 0.5, y: -50 }}
               className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
             >
-              <div className="bg-black/60 backdrop-blur-md p-8 rounded-3xl border-4 border-white shadow-2xl flex flex-col items-center gap-4">
-                <motion.div
-                  initial={{ rotate: -10 }}
-                  animate={{ rotate: 10 }}
-                  transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.5 }}
-                  className="text-8xl"
-                >
-                  {rankChange.type === 'up' ? '🎊' : '📉'}
-                </motion.div>
-                <h2 className={`text-4xl font-black ${rankChange.type === 'up' ? 'text-yellow-400' : 'text-red-400'}`}>
-                  {rankChange.type === 'up' ? '段位升级！' : '段位下降'}
-                </h2>
-                <div className="flex items-center gap-6 mt-4">
-                  <div className="flex flex-col items-center gap-2 opacity-60">
-                    <span className="text-4xl">{rankChange.from.icon}</span>
-                    <span className="text-white font-bold">{rankChange.from.name}</span>
+              <div className="bg-black/80 backdrop-blur-md p-8 rounded-3xl border-4 border-[#ffb300] shadow-[0_0_50px_rgba(255,179,0,0.5)] flex flex-col items-center gap-6">
+                
+                {/* Score Change Animation */}
+                <div className="flex flex-col items-center">
+                  <h2 className="text-3xl font-black text-white mb-2 tracking-widest">排位结算</h2>
+                  <div className="flex items-center gap-4">
+                    <span className="text-4xl font-mono text-gray-300">{rankChange.currentRP}</span>
+                    <ChevronRight className="text-white animate-pulse" size={32} />
+                    <motion.span 
+                      initial={{ scale: 1 }}
+                      animate={{ scale: [1, 1.5, 1] }}
+                      transition={{ delay: 0.3, duration: 0.5 }}
+                      className={`text-5xl font-mono font-black ${rankChange.rpChange > 0 ? 'text-green-400' : rankChange.rpChange < 0 ? 'text-red-400' : 'text-yellow-400'}`}
+                      style={{ textShadow: `0 0 20px ${rankChange.rpChange > 0 ? '#4ade80' : rankChange.rpChange < 0 ? '#f87171' : '#facc15'}` }}
+                    >
+                      {rankChange.newRP}
+                    </motion.span>
                   </div>
-                  <ChevronRight className="text-white" size={32} />
                   <motion.div 
-                    initial={{ scale: 1 }}
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ delay: 0.5, duration: 0.5 }}
-                    className="flex flex-col items-center gap-2"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    className={`mt-2 text-2xl font-black ${rankChange.rpChange > 0 ? 'text-green-400' : rankChange.rpChange < 0 ? 'text-red-400' : 'text-yellow-400'}`}
                   >
-                    <span className="text-6xl drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">{rankChange.to.icon}</span>
-                    <span className="text-white text-2xl font-black" style={{ color: rankChange.to.color }}>{rankChange.to.name}</span>
+                    {rankChange.rpChange > 0 ? `+${rankChange.rpChange}` : rankChange.rpChange} 积分
                   </motion.div>
                 </div>
+
+                {/* Rank Tier Change Animation (only if changed) */}
+                {rankChange.type !== 'same' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    transition={{ delay: 1, duration: 0.5 }}
+                    className="flex flex-col items-center border-t-2 border-white/20 pt-6 mt-2 w-full"
+                  >
+                    <motion.div
+                      initial={{ rotate: -10 }}
+                      animate={{ rotate: 10 }}
+                      transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.5 }}
+                      className="text-6xl mb-2"
+                    >
+                      {rankChange.type === 'up' ? '🎊' : '📉'}
+                    </motion.div>
+                    <h2 className={`text-3xl font-black ${rankChange.type === 'up' ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {rankChange.type === 'up' ? '段位升级！' : '段位下降'}
+                    </h2>
+                    <div className="flex items-center gap-6 mt-4">
+                      <div className="flex flex-col items-center gap-2 opacity-60">
+                        <span className="text-4xl">{rankChange.from.icon}</span>
+                        <span className="text-white font-bold">{rankChange.from.name}</span>
+                      </div>
+                      <ChevronRight className="text-white" size={32} />
+                      <motion.div 
+                        initial={{ scale: 1 }}
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ delay: 1.5, duration: 0.5 }}
+                        className="flex flex-col items-center gap-2"
+                      >
+                        <span className="text-6xl drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">{rankChange.to.icon}</span>
+                        <span className="text-white text-2xl font-black" style={{ color: rankChange.to.color }}>{rankChange.to.name}</span>
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </motion.div>
           )}
@@ -5126,12 +5170,12 @@ function GameContent() {
                         transition={{ duration: 0.2 }}
                         className="space-y-3"
                       >
-                        {(leaderboardTab === 'score' ? leaderboard : rankLeaderboard).length > 0 ? (leaderboardTab === 'score' ? leaderboard : rankLeaderboard).map((entry, i) => (
+                        {(leaderboardTab === 'score' ? leaderboard : rankLeaderboard).length > 0 ? (leaderboardTab === 'score' ? leaderboard : rankLeaderboard).map((entry: any, i) => (
                           <motion.div 
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.03 }}
-                            key={`${leaderboardTab}-${entry.name}-${i}`} 
+                            key={entry.userId || `${leaderboardTab}-${entry.name}-${i}`} 
                             className={`flex justify-between items-center p-3 rounded-2xl border-2 shadow-sm relative overflow-hidden ${
                               i === 0 ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400 z-10' : 
                               i === 1 ? 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300' : 
@@ -5176,17 +5220,23 @@ function GameContent() {
                                   {i < 3 && <Star className={`w-3 h-3 ${i === 0 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-400'}`} />}
                                 </div>
                                 {entry.titleId && TITLES[entry.titleId] && (
-                                  <span 
-                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit ${TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : ''}`}
-                                    style={{ 
-                                      color: TITLES[entry.titleId].color, 
-                                      backgroundColor: `${TITLES[entry.titleId].color}20`,
-                                      textShadow: TITLES[entry.titleId].shadow,
-                                      border: `1px solid ${TITLES[entry.titleId].color}40`
-                                    }}
-                                  >
-                                    {TITLES[entry.titleId].name}
-                                  </span>
+                                  <div className="h-5 flex items-center">
+                                    <span 
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block w-fit origin-center ${
+                                        TITLES[entry.titleId].effect === 'pulse' ? 'animate-pulse' : 
+                                        TITLES[entry.titleId].effect === 'rotate' ? 'animate-spin' : 
+                                        TITLES[entry.titleId].effect === 'shake' ? 'animate-bounce' : ''
+                                      }`}
+                                      style={{ 
+                                        color: TITLES[entry.titleId].color, 
+                                        backgroundColor: `${TITLES[entry.titleId].color}20`,
+                                        textShadow: TITLES[entry.titleId].shadow,
+                                        border: `1px solid ${TITLES[entry.titleId].color}40`
+                                      }}
+                                    >
+                                      {TITLES[entry.titleId].name}
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                             </div>
