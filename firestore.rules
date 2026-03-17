@@ -200,7 +200,7 @@ service cloud.firestore {
                        isValidUserStatsCreate(request.resource.data) && 
                        uidUnchanged();
       // Only the owner can update their own stats
-      allow update: if isOwner(userId) && 
+      allow update: if (isOwner(userId) || isAdmin()) && 
                        isValidUserStatsUpdate(request.resource.data) && 
                        uidNotModified();
       allow delete: if isOwner(userId);
