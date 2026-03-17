@@ -539,7 +539,7 @@ function GameContent() {
   const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'shop' | 'gacha'>('start');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [rankPoints, setRankPoints] = useState(1000); // Default Bronze III
+  const [rankPoints, setRankPoints] = useState<number | null>(null); // Default Bronze III
   const [rankedWins, setRankedWins] = useState(0);
   const [rankedTotal, setRankedTotal] = useState(0);
   const [diamonds, setDiamonds] = useState(200);
@@ -616,13 +616,14 @@ function GameContent() {
     if (highScore >= 100000 && !newTitles.includes('creator')) { newTitles.push('creator'); changed = true; }
 
     // Ranked Titles
-    if (rankPoints >= 0 && !newTitles.includes('rank_bronze')) { newTitles.push('rank_bronze'); changed = true; }
-    if (rankPoints >= 1200 && !newTitles.includes('rank_silver')) { newTitles.push('rank_silver'); changed = true; }
-    if (rankPoints >= 1400 && !newTitles.includes('rank_gold')) { newTitles.push('rank_gold'); changed = true; }
-    if (rankPoints >= 1600 && !newTitles.includes('rank_platinum')) { newTitles.push('rank_platinum'); changed = true; }
-    if (rankPoints >= 1800 && !newTitles.includes('rank_diamond')) { newTitles.push('rank_diamond'); changed = true; }
-    if (rankPoints >= 2000 && !newTitles.includes('rank_star')) { newTitles.push('rank_star'); changed = true; }
-    if (rankPoints >= 2200 && !newTitles.includes('rank_king')) { newTitles.push('rank_king'); changed = true; }
+    const currentRP = rankPoints ?? 1000;
+    if (currentRP >= 0 && !newTitles.includes('rank_bronze')) { newTitles.push('rank_bronze'); changed = true; }
+    if (currentRP >= 1200 && !newTitles.includes('rank_silver')) { newTitles.push('rank_silver'); changed = true; }
+    if (currentRP >= 1400 && !newTitles.includes('rank_gold')) { newTitles.push('rank_gold'); changed = true; }
+    if (currentRP >= 1600 && !newTitles.includes('rank_platinum')) { newTitles.push('rank_platinum'); changed = true; }
+    if (currentRP >= 1800 && !newTitles.includes('rank_diamond')) { newTitles.push('rank_diamond'); changed = true; }
+    if (currentRP >= 2000 && !newTitles.includes('rank_star')) { newTitles.push('rank_star'); changed = true; }
+    if (currentRP >= 2200 && !newTitles.includes('rank_king')) { newTitles.push('rank_king'); changed = true; }
 
     if (changed) {
       setUnlockedTitles(newTitles);
@@ -631,11 +632,11 @@ function GameContent() {
 
     const newFrames = [...unlockedFrames];
     let framesChanged = false;
-    if (rankPoints >= 1400 && !newFrames.includes('gold_shield')) { newFrames.push('gold_shield'); framesChanged = true; }
-    if (rankPoints >= 1600 && !newFrames.includes('platinum_wings')) { newFrames.push('platinum_wings'); framesChanged = true; }
-    if (rankPoints >= 1800 && !newFrames.includes('diamond_light')) { newFrames.push('diamond_light'); framesChanged = true; }
-    if (rankPoints >= 2000 && !newFrames.includes('star_glow')) { newFrames.push('star_glow'); framesChanged = true; }
-    if (rankPoints >= 2200 && !newFrames.includes('king_wind')) { newFrames.push('king_wind'); framesChanged = true; }
+    if (currentRP >= 1400 && !newFrames.includes('gold_shield')) { newFrames.push('gold_shield'); framesChanged = true; }
+    if (currentRP >= 1600 && !newFrames.includes('platinum_wings')) { newFrames.push('platinum_wings'); framesChanged = true; }
+    if (currentRP >= 1800 && !newFrames.includes('diamond_light')) { newFrames.push('diamond_light'); framesChanged = true; }
+    if (currentRP >= 2000 && !newFrames.includes('star_glow')) { newFrames.push('star_glow'); framesChanged = true; }
+    if (currentRP >= 2200 && !newFrames.includes('king_wind')) { newFrames.push('king_wind'); framesChanged = true; }
 
     if (framesChanged) {
       setUnlockedFrames(newFrames);
@@ -644,10 +645,10 @@ function GameContent() {
 
     const newEffects = [...unlockedEntranceEffects];
     let effectsChanged = false;
-    if (rankPoints >= 1600 && !newEffects.includes('flowing_light')) { newEffects.push('flowing_light'); effectsChanged = true; }
-    if (rankPoints >= 1800 && !newEffects.includes('diamond_sparkle')) { newEffects.push('diamond_sparkle'); effectsChanged = true; }
-    if (rankPoints >= 2000 && !newEffects.includes('star_trek')) { newEffects.push('star_trek'); effectsChanged = true; }
-    if (rankPoints >= 2200 && !newEffects.includes('king_arrival')) { newEffects.push('king_arrival'); effectsChanged = true; }
+    if (currentRP >= 1600 && !newEffects.includes('flowing_light')) { newEffects.push('flowing_light'); effectsChanged = true; }
+    if (currentRP >= 1800 && !newEffects.includes('diamond_sparkle')) { newEffects.push('diamond_sparkle'); effectsChanged = true; }
+    if (currentRP >= 2000 && !newEffects.includes('star_trek')) { newEffects.push('star_trek'); effectsChanged = true; }
+    if (currentRP >= 2200 && !newEffects.includes('king_arrival')) { newEffects.push('king_arrival'); effectsChanged = true; }
 
     if (effectsChanged) {
       setUnlockedEntranceEffects(newEffects);
@@ -829,8 +830,12 @@ function GameContent() {
           unsubscribeUser = onSnapshot(doc(db, 'users', u.uid), async (userDoc) => {
             if (userDoc.exists()) {
               const data = userDoc.data();
+              console.log("Firestore data received:", data);
+              console.log("Rank points in data:", data.rankPoints);
               setHighScore(data.highScore || 0);
-              setRankPoints(data.rankPoints ?? 1000);
+              const rp = data.rankPoints ?? 1000;
+              setRankPoints(rp);
+              console.log("Rank points state updated to:", rp);
               setRankedWins(data.rankedWins || 0);
               setRankedTotal(data.rankedTotal || 0);
               setDiamonds(data.diamonds || 0);
@@ -853,14 +858,6 @@ function GameContent() {
               setSelectedEntranceEffect(data.selectedEntranceEffect || null);
               setUnlockedEntranceEffects(data.unlockedEntranceEffects || []);
 
-              // Migration for existing users
-              if (!('rankPoints' in data)) {
-              setDoc(doc(db, 'users', u.uid), {
-                  rankPoints: 1000,
-                  rankedWins: 0,
-                  rankedTotal: 0
-                }, { merge: true }).catch(err => console.error("Migration error:", err));
-              }
             } else {
               // Initialize user doc
               const initialData = {
@@ -1766,7 +1763,9 @@ function GameContent() {
         if (!userDoc.exists()) return;
         
         const data = userDoc.data();
+        console.log("Transaction data:", data);
         let currentRP = data.rankPoints ?? 1000;
+        console.log("Current RP in transaction:", currentRP);
         let wins = data.rankedWins || 0;
         let total = data.rankedTotal || 0;
         let currentDiamonds = data.diamonds || 0;
@@ -4022,9 +4021,10 @@ function GameContent() {
               </div>
 
               {(() => {
-                const rankInfo = getRankInfo(rankPoints);
-                const nextRank = RANK_SYSTEM.find(r => r.minRP > rankPoints);
-                const progress = nextRank ? ((rankPoints - rankInfo.minRP) / (nextRank.minRP - rankInfo.minRP)) * 100 : 100;
+                const currentRP = rankPoints ?? 1000;
+                const rankInfo = getRankInfo(currentRP);
+                const nextRank = RANK_SYSTEM.find(r => r.minRP > currentRP);
+                const progress = nextRank ? ((currentRP - rankInfo.minRP) / (nextRank.minRP - rankInfo.minRP)) * 100 : 100;
                 
                 return (
                   <div className="w-full flex flex-col items-center gap-2">
@@ -4037,9 +4037,9 @@ function GameContent() {
 
                     <div className="w-full mt-2 bg-white/50 p-3 rounded-2xl border-2 border-[#0288d1]/20">
                       <div className="flex justify-between items-end mb-1">
-                        <span className="text-[#01579b] font-black text-sm">{rankPoints} RP</span>
+                        <span className="text-[#01579b] font-black text-sm">{currentRP} RP</span>
                         {nextRank ? (
-                          <span className="text-[10px] font-bold text-gray-500">距离 {nextRank.name} 还需 {nextRank.minRP - rankPoints} RP</span>
+                          <span className="text-[10px] font-bold text-gray-500">距离 {nextRank.name} 还需 {nextRank.minRP - currentRP} RP</span>
                         ) : (
                           <span className="text-[10px] font-bold text-gray-500">已达最高段位</span>
                         )}
@@ -5858,15 +5858,15 @@ function GameContent() {
                               ) : (
                                 <>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-lg drop-shadow-sm">{getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).icon}</span>
+                                    <span className="text-lg drop-shadow-sm">{getRankInfo(entry.rankPoints ?? 1000).icon}</span>
                                     <span className={`font-mono font-black text-lg leading-none ${
                                       i === 0 ? 'text-blue-700 text-xl' : 
                                       i === 1 ? 'text-gray-600' : 
                                       i === 2 ? 'text-orange-700' : 'text-blue-600'
-                                    }`}>{'rankPoints' in entry ? entry.rankPoints : 1000}</span>
+                                    }`}>{entry.rankPoints ?? 1000}</span>
                                   </div>
-                                  <span className="text-[10px] font-bold" style={{ color: getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).color }}>
-                                    {getRankInfo('rankPoints' in entry ? entry.rankPoints : 1000).name}
+                                  <span className="text-[10px] font-bold" style={{ color: getRankInfo(entry.rankPoints ?? 1000).color }}>
+                                    {getRankInfo(entry.rankPoints ?? 1000).name}
                                   </span>
                                   {'rankedTotal' in entry && (entry as any).rankedTotal > 0 && (
                                     <span className="text-[8px] text-gray-400 font-bold mt-0.5">
