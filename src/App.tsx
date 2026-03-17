@@ -830,7 +830,7 @@ function GameContent() {
             if (userDoc.exists()) {
               const data = userDoc.data();
               setHighScore(data.highScore || 0);
-              setRankPoints(data.rankPoints || 1000);
+              setRankPoints(data.rankPoints ?? 1000);
               setRankedWins(data.rankedWins || 0);
               setRankedTotal(data.rankedTotal || 0);
               setDiamonds(data.diamonds || 0);
@@ -1766,7 +1766,7 @@ function GameContent() {
         if (!userDoc.exists()) return;
         
         const data = userDoc.data();
-        let currentRP = data.rankPoints || 1000;
+        let currentRP = data.rankPoints ?? 1000;
         let wins = data.rankedWins || 0;
         let total = data.rankedTotal || 0;
         let currentDiamonds = data.diamonds || 0;
@@ -1801,12 +1801,19 @@ function GameContent() {
         rankUpOrDown = {
           from: oldRank,
           to: newRank,
-          type: newRank.name !== oldRank.name ? (currentRP > (data.rankPoints || 1000) ? 'up' : 'down') : 'same',
+          type: newRank.name !== oldRank.name ? (currentRP > (data.rankPoints ?? 1000) ? 'up' : 'down') : 'same',
           rpChange: rpChange,
-          currentRP: data.rankPoints || 1000,
+          currentRP: data.rankPoints ?? 1000,
           newRP: currentRP
         };
 
+        console.log("Updating user document with:", {
+          rankPoints: currentRP,
+          rankedWins: wins,
+          rankedTotal: total,
+          diamonds: currentDiamonds,
+          lastRankedWinDate: lastWinDate
+        });
         transaction.update(userRef, {
           rankPoints: currentRP,
           rankedWins: wins,
