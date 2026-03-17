@@ -2446,7 +2446,7 @@ function GameContent() {
         e.preventDefault();
         if (gameState === 'playing') {
           jump();
-        } else if (gameState === 'start' || gameState === 'gameover') {
+        } else if (gameState === 'start') {
           showInstructions();
         } else if (gameState === 'instructions') {
           startGame();
@@ -2455,7 +2455,7 @@ function GameContent() {
         e.preventDefault();
         if (gameState === 'playing') {
           restore();
-        } else if (gameState === 'start' || gameState === 'gameover') {
+        } else if (gameState === 'start') {
           showInstructions();
         } else if (gameState === 'instructions') {
           startGame();
