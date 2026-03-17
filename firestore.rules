@@ -194,7 +194,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       // TEMPORARY: Allow any authenticated user to read all users for restoration
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() || isAdmin();
       // Only the owner can create their own stats
       allow create: if isOwner(userId) && 
                        isValidUserStatsCreate(request.resource.data) && 
