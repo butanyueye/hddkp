@@ -1685,7 +1685,10 @@ function GameContent() {
   };
 
   const updateMatchScore = useCallback(async (currentScore: number, status?: string) => {
-    if (!isMultiplayer || !matchId || !user || !matchDataRef.current) return;
+    if (!isMultiplayer || !matchId || !user || !matchDataRef.current) {
+      console.log("updateMatchScore skipped", { isMultiplayer, matchId, user, matchData: !!matchDataRef.current });
+      return;
+    }
     try {
       const matchRef = doc(db, 'matches', matchId);
       const data = matchDataRef.current;
@@ -1694,6 +1697,8 @@ function GameContent() {
       
       const updateData: any = { ...data[playerKey], score: currentScore };
       if (status) updateData.status = status;
+
+      console.log("updateMatchScore syncing", { playerKey, currentScore, status });
 
       // Update locally first to avoid waiting for snapshot
       matchDataRef.current = {
@@ -1704,6 +1709,7 @@ function GameContent() {
       await setDoc(matchRef, {
         [playerKey]: updateData
       }, { merge: true });
+      console.log("updateMatchScore sync success");
     } catch (e) {
       console.error("Score sync error:", e);
     }
@@ -1712,6 +1718,7 @@ function GameContent() {
   const finishMatch = useCallback(async (finalScore: number) => {
     if (!isMultiplayer || !matchId || !user) return;
     try {
+      console.log("finishMatch called", { finalScore });
       await runTransaction(db, async (transaction) => {
         const matchRef = doc(db, 'matches', matchId);
         const sfDoc = await transaction.get(matchRef);
@@ -1722,6 +1729,8 @@ function GameContent() {
         const playerKey = isPlayer1 ? 'player1' : 'player2';
         const oppKey = isPlayer1 ? 'player2' : 'player1';
         
+        console.log("finishMatch transaction", { playerKey, oppKey, status: data[oppKey]?.status });
+
         const newData = {
           ...data,
           [playerKey]: {
@@ -1732,6 +1741,7 @@ function GameContent() {
         };
         
         if (newData[oppKey] && newData[oppKey].status === 'dead') {
+          console.log("finishMatch: both players dead, finishing match");
           newData.status = 'finished';
           if (newData.player1.score > newData.player2.score) {
             newData.winner = newData.player1.uid;
