@@ -84,7 +84,7 @@ service cloud.firestore {
 
     function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
+             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday']) &&
              validStringLength(data, 'userId', 1, 100) &&
              (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
              (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
@@ -106,11 +106,18 @@ service cloud.firestore {
              (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20));
+             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('unlockedEffects' in data) || isValidList(data, 'unlockedEffects', 100)) &&
+             (!('selectedEffect' in data) || data.selectedEffect == null || validStringLength(data, 'selectedEffect', 1, 50)) &&
+             (!('checkInCount' in data) || isPositiveNumber(data, 'checkInCount')) &&
+             (!('lastCheckInDate' in data) || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
+             (!('lastCheckIn' in data) || data.lastCheckIn is timestamp) &&
+             (!('hasCheckedInToday' in data) || data.hasCheckedInToday is bool);
     }
 
     function isValidUserStatsUpdate(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects']) &&
+      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday']) &&
              (!('userId' in data) || validStringLength(data, 'userId', 1, 100)) &&
              (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
              (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
@@ -132,7 +139,14 @@ service cloud.firestore {
              (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20));
+             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('unlockedEffects' in data) || isValidList(data, 'unlockedEffects', 100)) &&
+             (!('selectedEffect' in data) || data.selectedEffect == null || validStringLength(data, 'selectedEffect', 1, 50)) &&
+             (!('checkInCount' in data) || isPositiveNumber(data, 'checkInCount')) &&
+             (!('lastCheckInDate' in data) || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
+             (!('lastCheckIn' in data) || data.lastCheckIn is timestamp) &&
+             (!('hasCheckedInToday' in data) || data.hasCheckedInToday is bool);
     }
 
     function isValidCheckIn(data) {

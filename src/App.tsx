@@ -911,8 +911,10 @@ function GameContent() {
               
               setHasCheckedInToday(isToday);
               
-              if (isToday || isYesterday) {
+              if (isToday) {
                 setCheckInCount(count);
+              } else if (isYesterday) {
+                setCheckInCount(count === 7 ? 0 : count);
               } else {
                 setCheckInCount(0);
               }
