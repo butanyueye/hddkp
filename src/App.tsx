@@ -146,6 +146,41 @@ const AVATAR_FRAMES = {
   'king_wind': { name: '王者之风', color: '#ff1744', effect: 'shake', border: '4px double #ff1744', shadow: '0 0 30px #ff1744' },
 };
 
+const getRandomTypeForBiome = (biomeId: string) => {
+  const types: {[key: string]: string[]} = {
+    'FOREST': ['tree', 'bush', 'rock'],
+    'DESERT': ['cactus', 'camel', 'rock'],
+    'ICE': ['iceberg', 'snowdrift'],
+    'CYBER': ['building', 'neon_sign'],
+    'SPACE': ['star', 'planet'],
+    'VOLCANO': ['volcano', 'rock'],
+    'UNDERWATER': ['coral', 'seaweed'],
+    'VOID': ['void_particle'],
+    'JUNGLE': ['tree', 'bush'],
+    'DESERT_STORM': ['cactus', 'rock'],
+    'NEON_DREAM': ['neon_sign', 'building']
+  };
+  const biomeTypes = types[biomeId] || ['rock'];
+  return biomeTypes[Math.floor(Math.random() * biomeTypes.length)];
+}
+
+const drawBackgroundElement = (ctx: CanvasRenderingContext2D, el: BackgroundElement) => {
+  ctx.fillStyle = '#333';
+  if (el.type === 'tree') {
+    ctx.fillStyle = '#2e7d32';
+    ctx.fillRect(el.x, el.y, 20, 50);
+  } else if (el.type === 'cactus') {
+    ctx.fillStyle = '#81c784';
+    ctx.fillRect(el.x, el.y, 15, 40);
+  } else if (el.type === 'camel') {
+    ctx.fillStyle = '#d7ccc8';
+    ctx.fillRect(el.x, el.y, 30, 20);
+  } else if (el.type === 'rock') {
+    ctx.fillStyle = '#9e9e9e';
+    ctx.fillRect(el.x, el.y, 20, 15);
+  }
+}
+
 type FrameId = keyof typeof AVATAR_FRAMES;
 
 const ENTRANCE_EFFECTS = {
@@ -408,6 +443,13 @@ interface Cloud {
   width: number;
   speed: number;
   layer: number; // For parallax
+}
+
+interface BackgroundElement {
+  x: number;
+  y: number;
+  type: string;
+  layer: number;
 }
 
 interface Particle {
@@ -772,6 +814,8 @@ function GameContent() {
     speed: 0.1 + Math.random() * 0.5,
     layer: Math.floor(Math.random() * 3)
   })));
+
+  const backgroundElementsRef = useRef<BackgroundElement[]>([]);
 
   const createParticles = useCallback((x: number, y: number, color: string, count: number) => {
     for (let i = 0; i < count; i++) {
@@ -2621,6 +2665,15 @@ function GameContent() {
         envRef.current.announcement = BIOMES[currentBiomeIndex].name;
         envRef.current.announcementTimer = 180; // 3 seconds at 60fps
         
+        // Regenerate background elements
+        const biomeId = BIOMES[currentBiomeIndex].id;
+        backgroundElementsRef.current = Array.from({length: 20}, () => ({
+          x: Math.random() * canvas.width,
+          y: groundY - 50 - Math.random() * 50, // On the ground
+          type: getRandomTypeForBiome(biomeId),
+          layer: Math.floor(Math.random() * 3)
+        }));
+        
         // Grant 5 seconds of invincibility on map change (300 frames at 60fps)
         if (currentBiomeIndex > 0) {
           player.invincibility = 300;
@@ -2727,6 +2780,15 @@ function GameContent() {
         if (cloud.x + cloud.width < 0) {
           cloud.x = canvas.width;
           cloud.y = Math.random() * 400 + 20;
+        }
+      });
+
+      // Background Elements
+      backgroundElementsRef.current.forEach(el => {
+        const parallaxSpeed = 0.5 * (el.layer + 1) * (player.dash > 0 ? 5 : 1);
+        el.x -= parallaxSpeed * dt;
+        if (el.x + 50 < 0) {
+          el.x = canvas.width;
         }
       });
 
@@ -3402,6 +3464,11 @@ function GameContent() {
         ctx.arc(cloud.x + cloud.width / 3, cloud.y - 10, cloud.width / 2.5, 0, Math.PI * 2);
         ctx.arc(cloud.x + cloud.width * 0.66, cloud.y, cloud.width / 3, 0, Math.PI * 2);
         ctx.fill();
+      });
+
+      // Background Elements
+      backgroundElementsRef.current.forEach(el => {
+        drawBackgroundElement(ctx, el);
       });
 
       // Ground
