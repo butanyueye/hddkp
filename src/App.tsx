@@ -686,6 +686,7 @@ function GameContent() {
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte'>('hdd');
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(true);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showGachaResultModal, setShowGachaResultModal] = useState(false);
@@ -5336,6 +5337,56 @@ function GameContent() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {showAnnouncementModal && gameState === 'start' && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-[70] backdrop-blur-md p-4">
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-[#fff8e1] w-full max-w-md rounded-3xl border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col"
+              >
+                <div className="bg-[#ffb300] p-4 flex justify-between items-center">
+                  <h2 className="text-2xl font-black text-white drop-shadow-md">《呼大帝快跑》</h2>
+                  <button onClick={() => setShowAnnouncementModal(false)} className="text-white hover:scale-110 transition-transform">
+                    <X size={32} strokeWidth={3} />
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh] text-[#5d4037]">
+                  <h3 className="text-xl font-black text-center text-[#e65100]">【03.18版本更新公告】</h3>
+                  <p className="font-bold">本次更新对部分角色技能及游戏机制进行了调整，具体内容如下：</p>
+                  
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
+                    <h4 className="font-black text-[#e65100] mb-2">一、角色平衡性调整</h4>
+                    <p className="font-bold mb-1">海军大将（Hjdj）新增被动技能：</p>
+                    <ul className="list-disc pl-5 space-y-1 font-medium">
+                      <li>击败BOSS得分翻倍。</li>
+                      <li>拾取道具时，主动技能冷却时间减少2秒，并额外获得50分。</li>
+                    </ul>
+                    <p className="text-sm mt-2 text-[#8d6e63]">角色说明已同步更新。</p>
+                  </div>
+
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
+                    <h4 className="font-black text-[#e65100] mb-2">二、游戏机制优化</h4>
+                    <ul className="list-disc pl-5 space-y-2 font-medium">
+                      <li><span className="font-bold">地图切换机制：</span>生物群落变更时，玩家将获得5秒无敌时间。</li>
+                      <li><span className="font-bold">BOSS挑战难度：</span>击败BOSS后，下一次BOSS刷新的分数阈值提升幅度调整为4000分。</li>
+                      <li><span className="font-bold">BOSS击败奖励：</span>击败BOSS的基础得分调整为1000分。</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-[#ffecb3] flex justify-center border-t-4 border-[#ffb300]">
+                  <button 
+                    onClick={() => setShowAnnouncementModal(false)}
+                    className="px-12 py-3 bg-[#ffb300] text-white rounded-full font-black text-xl shadow-[0_6px_0_#ff8f00] active:translate-y-1 active:shadow-none transition-all"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              </motion.div>
             </div>
           )}
 
