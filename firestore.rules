@@ -84,17 +84,17 @@ service cloud.firestore {
 
     function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday']) &&
+             hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'displayName']) &&
              validStringLength(data, 'userId', 1, 100) &&
-             (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
-             (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
+             (!('name' in data) || data.name == null || validStringLength(data, 'name', 0, 200)) &&
+             (!('email' in data) || data.email == null || validStringLength(data, 'email', 0, 200)) &&
              isPositiveNumber(data, 'highScore') &&
              isPositiveNumber(data, 'totalGames') &&
              isPositiveNumber(data, 'diamonds') &&
              isValidInventoryMap(data.inventory) &&
              isValidList(data, 'achievements', 100) &&
              (!('unlockedCharacters' in data) || isValidList(data, 'unlockedCharacters', 10)) &&
-             (!('avatarId' in data) || validStringLength(data, 'avatarId', 1, 50)) &&
+             (!('avatarId' in data) || data.avatarId == null || validStringLength(data, 'avatarId', 0, 2000)) &&
              (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
              (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
@@ -106,28 +106,31 @@ service cloud.firestore {
              (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
+             (!('lastRankedWinDate' in data) || data.lastRankedWinDate == null || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
              (!('createdAt' in data) || data.createdAt is timestamp) &&
              (!('unlockedEffects' in data) || isValidList(data, 'unlockedEffects', 100)) &&
              (!('selectedEffect' in data) || data.selectedEffect == null || validStringLength(data, 'selectedEffect', 1, 50)) &&
              (!('checkInCount' in data) || isPositiveNumber(data, 'checkInCount')) &&
-             (!('lastCheckInDate' in data) || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
-             (!('lastCheckIn' in data) || data.lastCheckIn is timestamp) &&
-             (!('hasCheckedInToday' in data) || data.hasCheckedInToday is bool);
+             (!('lastCheckInDate' in data) || data.lastCheckInDate == null || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
+             (!('lastCheckIn' in data) || data.lastCheckIn == null || data.lastCheckIn is timestamp) &&
+             (!('hasCheckedInToday' in data) || data.hasCheckedInToday == null || data.hasCheckedInToday is bool) &&
+             (!('photoURL' in data) || data.photoURL == null || validStringLength(data, 'photoURL', 0, 2000)) &&
+             (!('displayName' in data) || data.displayName == null || validStringLength(data, 'displayName', 0, 200));
     }
 
     function isValidUserStatsUpdate(data) {
-      return hasOnlyAllowedFields(['userId', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday']) &&
+      return hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'displayName']) &&
              (!('userId' in data) || validStringLength(data, 'userId', 1, 100)) &&
-             (!('name' in data) || validStringLength(data, 'name', 0, 100)) &&
-             (!('email' in data) || validStringLength(data, 'email', 0, 100)) &&
+             (!('uid' in data) || validStringLength(data, 'uid', 1, 100)) &&
+             (!('name' in data) || data.name == null || validStringLength(data, 'name', 0, 200)) &&
+             (!('email' in data) || data.email == null || validStringLength(data, 'email', 0, 200)) &&
              (!('highScore' in data) || isPositiveNumber(data, 'highScore')) &&
              (!('totalGames' in data) || isPositiveNumber(data, 'totalGames')) &&
              (!('diamonds' in data) || isPositiveNumber(data, 'diamonds')) &&
              (!('inventory' in data) || isValidInventoryMap(data.inventory)) &&
              (!('achievements' in data) || isValidList(data, 'achievements', 100)) &&
              (!('unlockedCharacters' in data) || isValidList(data, 'unlockedCharacters', 10)) &&
-             (!('avatarId' in data) || validStringLength(data, 'avatarId', 1, 50)) &&
+             (!('avatarId' in data) || data.avatarId == null || validStringLength(data, 'avatarId', 0, 2000)) &&
              (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
              (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
@@ -139,14 +142,16 @@ service cloud.firestore {
              (!('rankPoints' in data) || isPositiveNumber(data, 'rankPoints')) &&
              (!('rankedWins' in data) || isPositiveNumber(data, 'rankedWins')) &&
              (!('rankedTotal' in data) || isPositiveNumber(data, 'rankedTotal')) &&
-             (!('lastRankedWinDate' in data) || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
+             (!('lastRankedWinDate' in data) || data.lastRankedWinDate == null || validStringLength(data, 'lastRankedWinDate', 0, 20)) &&
              (!('createdAt' in data) || data.createdAt is timestamp) &&
              (!('unlockedEffects' in data) || isValidList(data, 'unlockedEffects', 100)) &&
              (!('selectedEffect' in data) || data.selectedEffect == null || validStringLength(data, 'selectedEffect', 1, 50)) &&
              (!('checkInCount' in data) || isPositiveNumber(data, 'checkInCount')) &&
-             (!('lastCheckInDate' in data) || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
-             (!('lastCheckIn' in data) || data.lastCheckIn is timestamp) &&
-             (!('hasCheckedInToday' in data) || data.hasCheckedInToday is bool);
+             (!('lastCheckInDate' in data) || data.lastCheckInDate == null || validStringLength(data, 'lastCheckInDate', 0, 20)) &&
+             (!('lastCheckIn' in data) || data.lastCheckIn == null || data.lastCheckIn is timestamp) &&
+             (!('hasCheckedInToday' in data) || data.hasCheckedInToday == null || data.hasCheckedInToday is bool) &&
+             (!('photoURL' in data) || data.photoURL == null || validStringLength(data, 'photoURL', 0, 2000)) &&
+             (!('displayName' in data) || data.displayName == null || validStringLength(data, 'displayName', 0, 200));
     }
 
     function isValidCheckIn(data) {
