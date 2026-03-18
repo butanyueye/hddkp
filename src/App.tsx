@@ -2216,14 +2216,18 @@ function GameContent() {
 
   // --- Match Score Sync ---
   const lastSyncedScoreRef = useRef(0);
+  const lastSyncTimeRef = useRef(0);
   useEffect(() => {
     if (isMultiplayer && matchState === 'playing') {
-      if (score - lastSyncedScoreRef.current >= 5) {
+      const now = Date.now();
+      if (now - lastSyncTimeRef.current >= 1000 && score !== lastSyncedScoreRef.current) {
         updateMatchScore(score);
         lastSyncedScoreRef.current = score;
+        lastSyncTimeRef.current = now;
       }
     } else if (matchState === 'none' || matchState === 'matching') {
       lastSyncedScoreRef.current = 0;
+      lastSyncTimeRef.current = 0;
     }
   }, [score, isMultiplayer, matchState, updateMatchScore]);
 
@@ -2613,6 +2617,12 @@ function GameContent() {
         envRef.current.biomeTransition = 1.0;
         envRef.current.announcement = BIOMES[currentBiomeIndex].name;
         envRef.current.announcementTimer = 180; // 3 seconds at 60fps
+        
+        // Grant 5 seconds of invincibility on map change (300 frames at 60fps)
+        if (currentBiomeIndex > 0) {
+          player.invincibility = 300;
+          createParticles(player.x + player.width / 2, player.y + player.height / 2, '#60a5fa', 50);
+        }
       }
 
       if (envRef.current.biomeTransition > 0) {
@@ -2909,17 +2919,18 @@ function GameContent() {
           boss.y += 5 * dt; // Fall down
           if (boss.y > canvas.height) {
             boss.active = false;
-            boss.nextTriggerScore += 3000;
+            boss.nextTriggerScore += 4000;
             
             // Bonus rewards
-            setScore(s => s + 2000);
+            const bossScoreReward = selectedCharacter === 'hjdj' ? 2000 : 1000;
+            setScore(s => s + bossScoreReward);
             const nextDiamonds = diamonds + 666;
             setDiamonds(nextDiamonds);
             if (user) {
               setDoc(doc(db, 'users', user.uid), { diamonds: nextDiamonds }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
             }
             playSound('powerup');
-            envRef.current.announcement = '击败奶帝！获得 2000 分和 666 钻石！';
+            envRef.current.announcement = `击败奶帝！获得 ${bossScoreReward} 分和 666 钻石！`;
             envRef.current.announcementTimer = 120; // Show for 2 seconds (assuming 60fps)
           }
         }
@@ -2970,11 +2981,17 @@ function GameContent() {
                     setGameState('gameover');
                     stopBgm();
                     playSound('gameover');
-                    checkAchievements(score);
+                    const finalScore = score;
+                    setHighScore(prev => {
+                      const newHigh = Math.max(prev, finalScore);
+                      localStorage.setItem('highScore', newHigh.toString());
+                      return newHigh;
+                    });
+                    checkAchievements(finalScore);
                     if (user) {
-                      updateLeaderboard(score);
+                      updateLeaderboard(finalScore);
                       if (isMultiplayer) {
-                        updateMatchScore(score, 'dead');
+                        finishMatch(finalScore);
                       }
                     }
                   }
@@ -3096,6 +3113,14 @@ function GameContent() {
           // Huzi skill charge
           if (selectedCharacter === 'hz' && player.hzSkillCharges < 4) {
             player.hzSkillCharges += 1;
+          }
+          
+          // Hjdj skill charge and score
+          if (selectedCharacter === 'hjdj') {
+            if (player.hjdjSkillCooldown > 0) {
+              player.hjdjSkillCooldown = Math.max(0, player.hjdjSkillCooldown - 120);
+            }
+            setScore(s => s + 50);
           }
           
           // Hgte skill charge
@@ -5346,7 +5371,7 @@ function GameContent() {
                       author: '制作人：森森小帅哥',
                       img: hjdjImg, 
                       skill: '技能：火烧赤壁', 
-                      desc: '获得主动技能火烧赤壁，获得十秒加速同时火势蔓延将前方障碍摧毁，副作用是道具也被烧了。' 
+                      desc: '获得主动技能火烧赤壁，获得十秒加速同时火势蔓延将前方障碍摧毁，副作用是道具也被烧了。被动：击败BOSS获得双倍分数，每次捡到道具减少2秒技能冷却并额外获得50分。' 
                     },
                     { 
                       id: 'hz', 
