@@ -612,7 +612,7 @@ function GameContent() {
   const [showRankRewardsModal, setShowRankRewardsModal] = useState(false);
 
   const [achievements, setAchievements] = useState<string[]>([]);
-  const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd', 'hgte']);
+  const [unlockedCharacters, setUnlockedCharacters] = useState<string[]>(['hdd']);
   const [avatarId, setAvatarId] = useState<string>('hdd');
   const [showAvatarSelect, setShowAvatarSelect] = useState(false);
   const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
