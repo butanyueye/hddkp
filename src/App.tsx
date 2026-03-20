@@ -417,7 +417,7 @@ interface Boss {
   projectiles: { x: number; y: number; vx: number; vy: number; width: number; height: number; type: 'milk' | 'diaper' }[];
   attackItems: { x: number; y: number; width: number; height: number; collected: boolean }[];
   playerProjectiles: { x: number; y: number; vx: number; vy: number; width: number; height: number }[];
-  nextTriggerScore: number;
+  nextTriggerFrame: number;
 }
 
 interface PowerUp {
@@ -435,6 +435,23 @@ interface Diamond {
   width: number;
   height: number;
   collected: boolean;
+}
+
+interface Coin {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  collected: boolean;
+}
+
+interface BlackHole {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  active: boolean;
+  rotation: number;
 }
 
 interface Cloud {
@@ -784,6 +801,7 @@ function GameContent() {
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
   const diamondsRef = useRef<Diamond[]>([]);
+  const coinsRef = useRef<Coin[]>([]);
   const bossRef = useRef<Boss>({
     active: false,
     health: 100,
@@ -798,7 +816,13 @@ function GameContent() {
     projectiles: [],
     attackItems: [],
     playerProjectiles: [],
-    nextTriggerScore: 500
+    nextTriggerFrame: 3600
+  });
+  const blackHoleRef = useRef<BlackHole | null>(null);
+  const bonusLevelRef = useRef({
+    active: false,
+    timer: 0,
+    duration: 600 // 10 seconds at 60fps
   });
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef<number>(0);
@@ -1992,6 +2016,9 @@ function GameContent() {
     obstaclesRef.current = [];
     powerUpsRef.current = [];
     diamondsRef.current = [];
+    coinsRef.current = [];
+    blackHoleRef.current = null;
+    bonusLevelRef.current = { active: false, timer: 0, duration: 600 };
     bossRef.current = {
       active: false,
       health: 100,
@@ -2006,7 +2033,7 @@ function GameContent() {
       projectiles: [],
       attackItems: [],
       playerProjectiles: [],
-      nextTriggerScore: 500
+      nextTriggerFrame: 3600
     };
     particlesRef.current = [];
     frameCountRef.current = 0;
@@ -2349,6 +2376,9 @@ function GameContent() {
       // Clear obstacles near player
       obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 400);
       bossRef.current.projectiles = bossRef.current.projectiles.filter(p => p.x > playerRef.current.x + 400);
+      blackHoleRef.current = null;
+      bonusLevelRef.current.active = false;
+      coinsRef.current = [];
       
       setGameState('playing');
       startBgm();
@@ -2853,7 +2883,7 @@ function GameContent() {
       }
 
       // Boss Trigger
-      if (score >= bossRef.current.nextTriggerScore && !bossRef.current.active) {
+      if (frameCountRef.current >= bossRef.current.nextTriggerFrame && !bossRef.current.active) {
         bossRef.current.active = true;
         bossRef.current.health = bossRef.current.maxHealth;
         bossRef.current.phase = 'entering';
@@ -2870,7 +2900,7 @@ function GameContent() {
       const lastObstacle = obstacles[obstacles.length - 1];
       const minSpacing = 300 + Math.random() * 200; // Ensure at least 300px between obstacles
       
-      if (!bossRef.current.active && Math.floor(frameCountRef.current / spawnRateRef.current) > Math.floor(prevFrameCount / spawnRateRef.current)) {
+      if (!bossRef.current.active && !bonusLevelRef.current.active && Math.floor(frameCountRef.current / spawnRateRef.current) > Math.floor(prevFrameCount / spawnRateRef.current)) {
         if (!lastObstacle || (canvas.width - lastObstacle.x) > minSpacing) {
           const types: ObstacleType[] = ['normal', 'tall', 'wide', 'flying', 'sliding'];
           const type = types[Math.floor(Math.random() * types.length)];
@@ -2910,7 +2940,7 @@ function GameContent() {
       }
 
       // Spawn Power-ups
-      if (!bossRef.current.active && Math.floor(frameCountRef.current / 200) > Math.floor(prevFrameCount / 200) && Math.random() > 0.4) {
+      if (!bossRef.current.active && !bonusLevelRef.current.active && Math.floor(frameCountRef.current / 200) > Math.floor(prevFrameCount / 200) && Math.random() > 0.4) {
         const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
         const type = types[Math.floor(Math.random() * types.length)];
         powerUps.push({
@@ -2923,15 +2953,43 @@ function GameContent() {
         });
       }
 
-      // Spawn Diamonds
-      if (!bossRef.current.active && Math.floor(frameCountRef.current / 150) > Math.floor(prevFrameCount / 150)) {
-        diamondsRef.current.push({
-          x: canvas.width,
-          y: groundY - 50 - Math.random() * 200,
-          width: 25,
-          height: 25,
-          collected: false
-        });
+      // Spawn Diamonds or Coins
+      if (!bossRef.current.active) {
+        if (bonusLevelRef.current.active) {
+          if (Math.floor(frameCountRef.current / 15) > Math.floor(prevFrameCount / 15)) {
+            coinsRef.current.push({
+              x: canvas.width,
+              y: groundY - 50 - Math.random() * 200,
+              width: 25,
+              height: 25,
+              collected: false
+            });
+          }
+        } else {
+          if (Math.floor(frameCountRef.current / 150) > Math.floor(prevFrameCount / 150)) {
+            diamondsRef.current.push({
+              x: canvas.width,
+              y: groundY - 50 - Math.random() * 200,
+              width: 25,
+              height: 25,
+              collected: false
+            });
+          }
+        }
+      }
+
+      // Spawn Black Hole
+      if (!bossRef.current.active && !bonusLevelRef.current.active && !blackHoleRef.current?.active) {
+        if (Math.random() < 0.001) { // Random chance to spawn
+          blackHoleRef.current = {
+            x: canvas.width + 500,
+            y: groundY - 150 - Math.random() * 100,
+            width: 80,
+            height: 80,
+            active: true,
+            rotation: 0
+          };
+        }
       }
 
       // Boss Update
@@ -2984,7 +3042,7 @@ function GameContent() {
           boss.y += 5 * dt; // Fall down
           if (boss.y > canvas.height) {
             boss.active = false;
-            boss.nextTriggerScore += 4000;
+            boss.nextTriggerFrame = frameCountRef.current + 7200;
             
             // Bonus rewards
             const bossScoreReward = selectedCharacter === 'hjdj' ? 2000 : 1000;
@@ -3217,6 +3275,41 @@ function GameContent() {
         }
       }
 
+      // Update Coins
+      for (let i = coinsRef.current.length - 1; i >= 0; i--) {
+        const c = coinsRef.current[i];
+        c.x -= currentSpeed * dt;
+
+        // Magnet effect
+        if (player.magnet > 0 || player.hxdActive || bonusLevelRef.current.active) {
+          const dx = player.x - c.x;
+          const dy = player.y - c.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < (bonusLevelRef.current.active ? 150 : 300)) {
+            c.x += dx * 0.15 * dt;
+            c.y += dy * 0.15 * dt;
+          }
+        }
+
+        // Collection
+        if (!c.collected && 
+            player.x < c.x + c.width &&
+            player.x + player.width > c.x &&
+            player.y < c.y + c.height &&
+            player.y + player.height > c.y) {
+          c.collected = true;
+          playSound('score');
+          setScore(s => s + 10);
+          createParticles(c.x + c.width/2, c.y + c.height/2, '#fbbf24', 15);
+          coinsRef.current.splice(i, 1);
+          continue;
+        }
+
+        if (c.x + c.width < 0) {
+          coinsRef.current.splice(i, 1);
+        }
+      }
+
       // Update Diamonds
       for (let i = diamondsRef.current.length - 1; i >= 0; i--) {
         const d = diamondsRef.current[i];
@@ -3270,6 +3363,43 @@ function GameContent() {
 
         if (d.x + d.width < 0) {
           diamondsRef.current.splice(i, 1);
+        }
+      }
+
+      // Update Bonus Level Timer
+      if (bonusLevelRef.current.active) {
+        bonusLevelRef.current.timer -= dt;
+        if (bonusLevelRef.current.timer <= 0) {
+          bonusLevelRef.current.active = false;
+        }
+      }
+
+      // Update Black Hole
+      if (blackHoleRef.current?.active) {
+        const bh = blackHoleRef.current;
+        bh.x -= currentSpeed * dt;
+        bh.rotation += 0.05 * dt;
+
+        // Collision with player
+        const dx = (player.x + player.width/2) - (bh.x + bh.width/2);
+        const dy = (player.y + player.height/2) - (bh.y + bh.height/2);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist < bh.width/2 + player.width/2) {
+          // Enter bonus level
+          bonusLevelRef.current.active = true;
+          bonusLevelRef.current.timer = bonusLevelRef.current.duration;
+          bh.active = false;
+          playSound('powerup');
+          createParticles(player.x, player.y, '#b388ff', 50);
+          
+          // Clear obstacles
+          obstaclesRef.current.length = 0;
+          bossRef.current.active = false;
+        }
+
+        if (bh.x + bh.width < 0) {
+          bh.active = false;
         }
       }
 
@@ -3450,32 +3580,85 @@ function GameContent() {
         groundColor = blend(prevBiome.ground, currentBiome.ground, t);
       }
 
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, skyColorTop);
-      gradient.addColorStop(1, skyColorBottom);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (bonusLevelRef.current.active) {
+        const time = frameCountRef.current * 0.02;
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        
+        // Convert HSL to RGB for canvas gradient
+        const hslToRgb = (h: number, s: number, l: number) => {
+          s /= 100;
+          l /= 100;
+          const k = (n: number) => (n + h / 30) % 12;
+          const a = s * Math.min(l, 1 - l);
+          const f = (n: number) =>
+            l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+          return `rgb(${Math.round(255 * f(0))}, ${Math.round(255 * f(8))}, ${Math.round(255 * f(4))})`;
+        };
 
-      // Clouds (Parallax)
-      cloudsRef.current.forEach(cloud => {
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + cloud.layer * 0.05})`;
+        bgGradient.addColorStop(0, hslToRgb((time * 20) % 360, 80, 20));
+        bgGradient.addColorStop(0.5, hslToRgb(((time * 20) + 45) % 360, 80, 30));
+        bgGradient.addColorStop(1, hslToRgb(((time * 20) + 90) % 360, 80, 40));
+        
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Speed lines/stars for bonus level
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        for(let i=0; i<30; i++) {
+           const sx = ((frameCountRef.current * (8 + i%5) + i * 123) % (canvas.width + 400)) - 200;
+           const sy = (i * 37) % groundY;
+           ctx.fillRect(canvas.width - sx, sy, 30 + (i%10)*10, 2);
+        }
+
+        // Ground
+        const groundGradient = ctx.createLinearGradient(0, groundY, 0, canvas.height);
+        groundGradient.addColorStop(0, hslToRgb(((time * 20) + 180) % 360, 60, 30));
+        groundGradient.addColorStop(1, '#000000');
+        ctx.fillStyle = groundGradient;
+        ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+        
+        // Grid lines on ground for synthwave feel
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(cloud.x, cloud.y, cloud.width / 3, 0, Math.PI * 2);
-        ctx.arc(cloud.x + cloud.width / 3, cloud.y - 10, cloud.width / 2.5, 0, Math.PI * 2);
-        ctx.arc(cloud.x + cloud.width * 0.66, cloud.y, cloud.width / 3, 0, Math.PI * 2);
-        ctx.fill();
-      });
+        for(let i=0; i<20; i++) {
+          const x = ((frameCountRef.current * 5 + i * 100) % canvas.width);
+          ctx.moveTo(canvas.width - x, groundY);
+          ctx.lineTo(canvas.width - x - 200, canvas.height);
+        }
+        ctx.moveTo(0, groundY + 20);
+        ctx.lineTo(canvas.width, groundY + 20);
+        ctx.moveTo(0, groundY + 60);
+        ctx.lineTo(canvas.width, groundY + 60);
+        ctx.stroke();
+      } else {
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, skyColorTop);
+        gradient.addColorStop(1, skyColorBottom);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Background Elements
-      backgroundElementsRef.current.forEach(el => {
-        drawBackgroundElement(ctx, el);
-      });
+        // Clouds (Parallax)
+        cloudsRef.current.forEach(cloud => {
+          ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + cloud.layer * 0.05})`;
+          ctx.beginPath();
+          ctx.arc(cloud.x, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+          ctx.arc(cloud.x + cloud.width / 3, cloud.y - 10, cloud.width / 2.5, 0, Math.PI * 2);
+          ctx.arc(cloud.x + cloud.width * 0.66, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
 
-      // Ground
-      ctx.fillStyle = groundColor;
-      ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(0, groundY, canvas.width, 10);
+        // Background Elements
+        backgroundElementsRef.current.forEach(el => {
+          drawBackgroundElement(ctx, el);
+        });
+
+        // Ground
+        ctx.fillStyle = groundColor;
+        ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(0, groundY, canvas.width, 10);
+      }
 
       // Weather Particles
       envRef.current.weatherParticles.forEach(wp => {
@@ -3553,6 +3736,72 @@ function GameContent() {
         ctx.shadowColor = POWERUP_CONFIG[pu.type].color;
         ctx.stroke();
         ctx.shadowBlur = 0;
+      });
+
+      // Black Hole
+      if (blackHoleRef.current?.active) {
+        const bh = blackHoleRef.current;
+        ctx.save();
+        ctx.translate(bh.x + bh.width/2, bh.y + bh.height/2);
+        ctx.rotate(bh.rotation);
+        
+        // Outer glow
+        const gradient = ctx.createRadialGradient(0, 0, bh.width/4, 0, 0, bh.width/2);
+        gradient.addColorStop(0, 'rgba(0,0,0,1)');
+        gradient.addColorStop(0.5, 'rgba(138,43,226,0.8)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, bh.width/2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner core
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(0, 0, bh.width/4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Swirls
+        ctx.strokeStyle = 'rgba(138,43,226,0.5)';
+        ctx.lineWidth = 2;
+        for(let i=0; i<3; i++) {
+          ctx.beginPath();
+          ctx.arc(0, 0, bh.width/3 + Math.sin(frameCountRef.current/10 + i)*5, (i*Math.PI*2)/3, (i*Math.PI*2)/3 + Math.PI);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Coins
+      coinsRef.current.forEach(c => {
+        ctx.save();
+        ctx.translate(c.x + c.width/2, c.y + c.height/2);
+        
+        const scaleX = Math.sin(frameCountRef.current * 0.1 + c.x * 0.01);
+        ctx.scale(scaleX, 1);
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, c.width/2, 0, Math.PI * 2);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#b45309';
+        ctx.stroke();
+        
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(0, 0, c.width/2 - 3, 0, Math.PI * 2);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.stroke();
+        
+        ctx.fillStyle = '#b45309';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('¥', 0, 1);
+        
+        ctx.restore();
       });
 
       // Diamonds
@@ -5424,25 +5673,23 @@ function GameContent() {
                 </div>
                 
                 <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh] text-[#5d4037]">
-                  <h3 className="text-xl font-black text-center text-[#e65100]">【03.18版本更新公告】</h3>
-                  <p className="font-bold">本次更新对部分角色技能及游戏机制进行了调整，具体内容如下：</p>
+                  <h3 className="text-xl font-black text-center text-[#e65100]">【03.20版本更新公告】</h3>
+                  <p className="font-bold">本次更新带来了全新的奖励关卡及BOSS机制调整，具体内容如下：</p>
                   
                   <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
-                    <h4 className="font-black text-[#e65100] mb-2">一、角色平衡性调整</h4>
-                    <p className="font-bold mb-1">海军大将（Hjdj）新增被动技能：</p>
+                    <h4 className="font-black text-[#e65100] mb-2">一、全新奖励关卡</h4>
+                    <p className="font-bold mb-1">黑洞奇遇全面升级：</p>
                     <ul className="list-disc pl-5 space-y-1 font-medium">
-                      <li>击败BOSS得分翻倍。</li>
-                      <li>拾取道具时，主动技能冷却时间减少2秒，并额外获得50分。</li>
+                      <li><span className="font-bold">视觉重制：</span>进入黑洞后将来到全新的赛博朋克风格星空隧道。</li>
+                      <li><span className="font-bold">金币狂欢：</span>奖励关卡内布满闪闪发光的金币，每收集一个金币将直接增加 <span className="text-[#e65100] font-black">10分</span>！</li>
                     </ul>
-                    <p className="text-sm mt-2 text-[#8d6e63]">角色说明已同步更新。</p>
                   </div>
 
                   <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
-                    <h4 className="font-black text-[#e65100] mb-2">二、游戏机制优化</h4>
+                    <h4 className="font-black text-[#e65100] mb-2">二、奶帝（BOSS）机制调整</h4>
                     <ul className="list-disc pl-5 space-y-2 font-medium">
-                      <li><span className="font-bold">地图切换机制：</span>生物群落变更时，玩家将获得5秒无敌时间。</li>
-                      <li><span className="font-bold">BOSS挑战难度：</span>击败BOSS后，下一次BOSS刷新的分数阈值提升幅度调整为4000分。</li>
-                      <li><span className="font-bold">BOSS击败奖励：</span>击败BOSS的基础得分调整为1000分。</li>
+                      <li><span className="font-bold">首次降临：</span>奶帝的出现不再依赖分数，现在玩家在游戏中存活满 <span className="text-[#e65100] font-black">1分钟</span> 时，奶帝将首次出现。</li>
+                      <li><span className="font-bold">后续追击：</span>击败奶帝后，经过 <span className="text-[#e65100] font-black">2分钟</span> 的冷却时间，奶帝会再次降临，考验你的生存极限！</li>
                     </ul>
                   </div>
                 </div>
