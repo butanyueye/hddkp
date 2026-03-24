@@ -1352,7 +1352,7 @@ function GameContent() {
       
       await updateDoc(doc(db, 'mails', mail.id), { isClaimed: true, isRead: true });
       
-      setToastMessage('已领取邮件奖励！');
+      setToastMessage('领取成功');
       setTimeout(() => setToastMessage(''), 3000);
       
       setSelectedMail({ ...mail, isClaimed: true, isRead: true });
@@ -5252,11 +5252,11 @@ function GameContent() {
                                   {reward.type === 'diamonds' ? '💎' : 
                                    reward.type === 'hgteFragments' ? '🧩' : 
                                    reward.type === 'ttdFragments' ? '🧩' : 
-                                   reward.type === 'char_santa' ? <img src="santa.png" className="w-4 h-4 object-contain" /> :
-                                   reward.type === 'char_hjdj' ? <img src="hjdj.png" className="w-4 h-4 object-contain" /> :
-                                   reward.type === 'char_hz' ? <img src="hz.png" className="w-4 h-4 object-contain" /> :
-                                   reward.type === 'char_hgte' ? <img src="hgte.png" className="w-4 h-4 object-contain" /> :
-                                   reward.type === 'char_ttd' ? <img src="ttd.png" className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_santa' ? <img src={getCharacterImage('santa')} className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hjdj' ? <img src={getCharacterImage('hjdj')} className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hz' ? <img src={getCharacterImage('hz')} className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hgte' ? <img src={getCharacterImage('hgte')} className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_ttd' ? <img src={getCharacterImage('ttd')} className="w-4 h-4 object-contain" /> :
                                    POWERUP_CONFIG[reward.type as PowerUpType]?.icon || '🎁'}
                                 </span>
                               ))}
@@ -5310,11 +5310,11 @@ function GameContent() {
                                   {reward.type === 'diamonds' ? '💎' : 
                                    reward.type === 'hgteFragments' ? '🧩' : 
                                    reward.type === 'ttdFragments' ? '🧩' : 
-                                   reward.type === 'char_santa' ? <img src="santa.png" className="w-6 h-6 object-contain" /> :
-                                   reward.type === 'char_hjdj' ? <img src="hjdj.png" className="w-6 h-6 object-contain" /> :
-                                   reward.type === 'char_hz' ? <img src="hz.png" className="w-6 h-6 object-contain" /> :
-                                   reward.type === 'char_hgte' ? <img src="hgte.png" className="w-6 h-6 object-contain" /> :
-                                   reward.type === 'char_ttd' ? <img src="ttd.png" className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_santa' ? <img src={getCharacterImage('santa')} className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hjdj' ? <img src={getCharacterImage('hjdj')} className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hz' ? <img src={getCharacterImage('hz')} className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hgte' ? <img src={getCharacterImage('hgte')} className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_ttd' ? <img src={getCharacterImage('ttd')} className="w-6 h-6 object-contain" /> :
                                    POWERUP_CONFIG[reward.type as PowerUpType]?.icon || '🎁'}
                                 </span>
                                 <span className="font-bold text-[#A65D2C]">
@@ -6089,7 +6089,7 @@ function GameContent() {
           />
 
           {toastMessage && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-black/80 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg border border-white/20 animate-bounce">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] bg-black/80 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg border border-white/20 animate-bounce">
               {toastMessage}
             </div>
           )}
