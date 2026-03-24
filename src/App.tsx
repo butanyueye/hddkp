@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase, ChevronRight } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase, ChevronRight, ArrowUp, ArrowDown, Mail, Bell, Trash2, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
@@ -19,6 +19,7 @@ const getCharacterImage = (charId: string | undefined) => {
     case 'hjdj': return hjdjImg;
     case 'hz': return hzImg;
     case 'hgte': return hgteImg;
+    case 'ttd': return 'ttd.png';
     case 'hdd':
     default: return hddImg;
   }
@@ -236,7 +237,8 @@ const CHARACTER_REQUIREMENTS: Record<string, number> = {
   hgte: 0,
   santa: 1000,
   hjdj: 2000,
-  hz: 3000
+  hz: 3000,
+  ttd: 0
 };
 
 let audioCtx: AudioContext | null = null;
@@ -390,7 +392,86 @@ interface Player {
   hgteSkillActive: number;
   hgtePassiveUsed: boolean;
   hxdActive: boolean;
+  ttdCombo: number;
+  ttdMultiplier: number;
+  ttdSuperJump: boolean;
+  ttdEnergyBar: { active: boolean, type: 'jump' | 'crouch', timer: number, maxTimer: number };
 }
+
+const TtdUI = ({ playerRef, selectedCharacter }: { playerRef: React.RefObject<Player>, selectedCharacter: string }) => {
+  const [tick, setTick] = useState(0);
+  
+  useEffect(() => {
+    let frame: number;
+    const update = () => {
+      setTick(t => t + 1);
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  if (selectedCharacter !== 'ttd') return null;
+  const player = playerRef.current;
+  if (!player) return null;
+
+  const progress = player.ttdEnergyBar.active 
+    ? (player.ttdEnergyBar.timer / player.ttdEnergyBar.maxTimer) * 100 
+    : 0;
+
+  return (
+    <div className="absolute bottom-4 left-24 z-10 flex flex-col items-start gap-1 pointer-events-none">
+      {/* Arrows and Multiplier */}
+      <div className="flex items-center gap-2 mb-1">
+        <AnimatePresence mode="wait">
+          {player.ttdEnergyBar.active && (
+            <motion.div 
+              key={player.ttdEnergyBar.type}
+              initial={{ scale: 0.5, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.5, opacity: 0, y: -10 }}
+              className={`w-12 h-12 rounded-full flex items-center justify-center border-4 ${
+                player.ttdEnergyBar.type === 'jump' 
+                  ? 'bg-green-500 border-green-300 shadow-[0_0_15px_rgba(74,222,128,0.5)]' 
+                  : 'bg-red-500 border-red-300 shadow-[0_0_15px_rgba(248,113,113,0.5)]'
+              }`}
+            >
+              {player.ttdEnergyBar.type === 'jump' ? (
+                <ArrowUp className="text-white w-8 h-8" strokeWidth={4} />
+              ) : (
+                <ArrowDown className="text-white w-8 h-8" strokeWidth={4} />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <motion.div 
+          key={player.ttdMultiplier}
+          initial={{ scale: 1.2, color: '#fff' }}
+          animate={{ scale: 1, color: '#facc15' }}
+          className="bg-black/80 px-3 py-1 rounded-xl border-2 border-yellow-400 shadow-lg"
+        >
+          <span className="font-black text-xl italic tracking-tighter">
+            x{player.ttdMultiplier.toFixed(1)}
+          </span>
+        </motion.div>
+      </div>
+
+      {/* Energy Bar */}
+      <div className="relative w-48 h-6 bg-black/60 rounded-sm border-2 border-white/20 overflow-hidden transform skew-x-[-15deg]">
+        <div 
+          className="h-full bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-600 shadow-[0_0_10px_rgba(250,204,21,0.5)]"
+          style={{ width: `${progress}%`, transition: 'width 0.05s linear' }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center skew-x-[15deg]">
+          <span className="text-[12px] font-black text-white uppercase tracking-widest drop-shadow-md">
+            {player.ttdEnergyBar.active ? 'SEQUENCE' : 'READY'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface Obstacle {
   x: number;
@@ -595,7 +676,7 @@ export default function App() {
 function GameContent() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scoreAccumulatorRef = useRef(0);
-  const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'shop' | 'gacha'>('start');
+  const [gameState, setGameState] = useState<'start' | 'instructions' | 'playing' | 'paused' | 'gameover' | 'leaderboard' | 'gacha'>('start');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [rankPoints, setRankPoints] = useState<number | null>(null); // Default Bronze III
@@ -635,6 +716,9 @@ function GameContent() {
   const [unlockingChar, setUnlockingChar] = useState<string | null>(null);
   const [reviveCount, setReviveCount] = useState(0);
   const [user, setUser] = useState<User | null>(null);
+  const [showAdminMailModal, setShowAdminMailModal] = useState(false);
+  const [adminMailData, setAdminMailData] = useState({ title: '', content: '', recipientId: 'all' });
+  const [adminMailRewards, setAdminMailRewards] = useState<{type: string, amount: number}[]>([]);
 
   // Title Unlock Logic
   useEffect(() => {
@@ -744,17 +828,18 @@ function GameContent() {
   
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte'>('hdd');
+  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte' | 'ttd'>('hdd');
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(true);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showGachaResultModal, setShowGachaResultModal] = useState(false);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
-  const [gachaResult, setGachaResult] = useState<{fragments: number, items: Record<string, number>}>({fragments: 0, items: {}});
+  const [gachaResult, setGachaResult] = useState<{hgteFragments: number, ttdFragments: number, items: Record<string, number>}>({hgteFragments: 0, ttdFragments: 0, items: {}});
   const [checkInCount, setCheckInCount] = useState(0);
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const [checkInMessage, setCheckInMessage] = useState('');
   const [hgteFragments, setHgteFragments] = useState(0);
+  const [ttdFragments, setTtdFragments] = useState(0);
   
   // Multiplayer state
   const [matchState, setMatchState] = useState<'none' | 'matching' | 'vs' | 'playing' | 'finished'>('none');
@@ -796,7 +881,11 @@ function GameContent() {
     hgtePartialCharges: 0,
     hgteSkillActive: 0,
     hgtePassiveUsed: false,
-    hxdActive: false
+    hxdActive: false,
+    ttdCombo: 0,
+    ttdMultiplier: 1,
+    ttdSuperJump: false,
+    ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 }
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
@@ -865,13 +954,16 @@ function GameContent() {
 
   // Friends & Custom Rooms state
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [showMailModal, setShowMailModal] = useState(false);
+  const [mails, setMails] = useState<any[]>([]);
+  const [selectedMail, setSelectedMail] = useState<any>(null);
   const [friends, setFriends] = useState<string[]>([]);
   const [rankChange, setRankChange] = useState<{from: any, to: any, type: 'up' | 'down' | 'same', rpChange: number, currentRP: number, newRP: number} | null>(null);
 
   const isModalOpen = showHonorModal || showRankedModal || showRankRewardsModal || showAvatarSelect || showCharSelect || 
                       showCheckInModal || showGachaResultModal || showInventoryModal || 
                       showFriendsModal || showAuthModal || rankChange !== null ||
-                      ['leaderboard', 'shop', 'gacha', 'instructions'].includes(gameState);
+                      ['leaderboard', 'gacha', 'instructions'].includes(gameState);
 
   const [allUsers, setAllUsers] = useState<{uid: string, name: string, avatarId: string}[]>([]);
   const [friendsData, setFriendsData] = useState<{uid: string, name: string, avatarId: string, title?: string}[]>([]);
@@ -914,12 +1006,14 @@ function GameContent() {
               
               const loadedUnlocked = data.unlockedCharacters || ['hdd'];
               const hgteFragments = data.hgteFragments || 0;
+              const ttdFragments = data.ttdFragments || 0;
               
               setUnlockedCharacters(loadedUnlocked);
               
               setAvatarId(data.avatarId || 'hdd');
               setFriends(data.friends || []);
               setHgteFragments(data.hgteFragments || 0);
+              setTtdFragments(data.ttdFragments || 0);
               setSelectedTitle(data.selectedTitle || null);
               setUnlockedTitles(data.unlockedTitles || ['rookie']);
               setSelectedFrame(data.selectedFrame || null);
@@ -943,6 +1037,7 @@ function GameContent() {
                 achievements: [],
                 unlockedCharacters: ['hdd'],
                 hgteFragments: 0,
+                ttdFragments: 0,
                 avatarId: 'hdd',
                 friends: [],
                 selectedTitle: null,
@@ -1021,6 +1116,29 @@ function GameContent() {
       if (unsubscribeUser) unsubscribeUser();
     };
   }, []);
+
+  // Fetch mails
+  useEffect(() => {
+    if (!user) {
+      setMails([]);
+      return;
+    }
+    const mailsQuery = query(
+      collection(db, 'mails'),
+      where('recipientId', '==', user.uid),
+      orderBy('timestamp', 'desc')
+    );
+    const unsubscribeMails = onSnapshot(mailsQuery, (snapshot) => {
+      const loadedMails = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMails(loadedMails);
+    }, (error) => {
+      console.error("Mails listener error:", error);
+    });
+    return () => unsubscribeMails();
+  }, [user]);
 
   // Invitation Listener
   useEffect(() => {
@@ -1128,6 +1246,121 @@ function GameContent() {
     }
   };
 
+  const fetchAllUsers = async () => {
+    try {
+      const usersRef = collection(db, 'users');
+      const snapshot = await getDocs(usersRef);
+      const usersList = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        name: doc.data().name || '匿名玩家',
+        avatarId: doc.data().avatarId || 'default'
+      }));
+      setAllUsers(usersList);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
+
+  const openAdminMailModal = () => {
+    fetchAllUsers();
+    setAdminMailData({ title: '', content: '', recipientId: 'all' });
+    setAdminMailRewards([]);
+    setShowAdminMailModal(true);
+  };
+
+  const sendAdminMail = async () => {
+    if (!adminMailData.title.trim() || !adminMailData.content.trim()) {
+      alert('请输入邮件标题和内容');
+      return;
+    }
+    try {
+      const baseMailData: any = {
+        title: adminMailData.title,
+        content: adminMailData.content,
+        sender: '系统管理员',
+        timestamp: serverTimestamp(),
+        isRead: false
+      };
+      if (adminMailRewards.length > 0) {
+        baseMailData.rewards = adminMailRewards;
+      }
+
+      if (adminMailData.recipientId === 'all') {
+        const promises = allUsers.map(u => 
+          addDoc(collection(db, 'mails'), { ...baseMailData, recipientId: u.uid })
+        );
+        await Promise.all(promises);
+      } else {
+        await addDoc(collection(db, 'mails'), { ...baseMailData, recipientId: adminMailData.recipientId });
+      }
+
+      alert('邮件发送成功！');
+      setShowAdminMailModal(false);
+    } catch (error) {
+      console.error('Error sending admin mail:', error);
+      alert('发送失败，请检查控制台。');
+    }
+  };
+
+  const markMailAsRead = async (mail: any) => {
+    if (mail.isRead) return;
+    try {
+      await updateDoc(doc(db, 'mails', mail.id), { isRead: true });
+      if (mail.rewards && user) {
+        let newDiamonds = diamonds;
+        let newInventory = { ...inventory };
+        let newHgteFragments = hgteFragments;
+        let newTtdFragments = ttdFragments;
+        let newUnlocked = [...unlockedCharacters];
+        
+        mail.rewards.forEach((reward: any) => {
+          if (reward.type === 'diamonds') newDiamonds += reward.amount;
+          else if (['shield', 'magnet', 'doubleScore', 'dash'].includes(reward.type)) {
+            newInventory[reward.type as PowerUpType] = (newInventory[reward.type as PowerUpType] || 0) + reward.amount;
+          } else if (reward.type === 'hgteFragments') {
+            newHgteFragments += reward.amount;
+          } else if (reward.type === 'ttdFragments') {
+            newTtdFragments += reward.amount;
+          } else if (reward.type.startsWith('char_')) {
+            const charId = reward.type.replace('char_', '');
+            if (!newUnlocked.includes(charId)) {
+              newUnlocked.push(charId);
+            }
+          }
+        });
+        
+        setDiamonds(newDiamonds);
+        setInventory(newInventory);
+        setHgteFragments(newHgteFragments);
+        setTtdFragments(newTtdFragments);
+        setUnlockedCharacters(newUnlocked);
+        
+        await setDoc(doc(db, 'users', user.uid), {
+          diamonds: newDiamonds,
+          inventory: newInventory,
+          hgteFragments: newHgteFragments,
+          ttdFragments: newTtdFragments,
+          unlockedCharacters: newUnlocked
+        }, { merge: true });
+        
+        setToastMessage('已领取邮件奖励！');
+        setTimeout(() => setToastMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error("Error marking mail as read:", error);
+    }
+  };
+
+  const deleteMail = async (mailId: string) => {
+    if (!window.confirm('确定要删除这封邮件吗？')) return;
+    try {
+      await deleteDoc(doc(db, 'mails', mailId));
+      setSelectedMail(null);
+    } catch (error) {
+      console.error("Error deleting mail:", error);
+    }
+  };
+
   const loginGuest = async () => {
     try {
       await signInAnonymously(auth);
@@ -1188,13 +1421,13 @@ function GameContent() {
     
     setDiamonds(prev => prev - cost);
     
-    let fragmentsGained = 0;
+    let ttdFragmentsGained = 0;
     const newInv = { ...inventory };
     
     for (let i = 0; i < count; i++) {
       const roll = Math.random();
       if (roll < 0.2) {
-        fragmentsGained += 1;
+        ttdFragmentsGained += 1;
       } else {
         const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
         const randomType = types[Math.floor(Math.random() * types.length)];
@@ -1202,15 +1435,18 @@ function GameContent() {
       }
     }
     
-    let newFragments = hgteFragments + fragmentsGained;
+    let newHgteFragments = hgteFragments;
+    let newTtdFragments = ttdFragments + ttdFragmentsGained;
     let newUnlocked = [...unlockedCharacters];
-    if (newFragments >= 78 && !newUnlocked.includes('hgte')) {
-      newUnlocked.push('hgte');
+    
+    if (newTtdFragments >= 78 && !newUnlocked.includes('ttd')) {
+      newUnlocked.push('ttd');
       setUnlockedCharacters(newUnlocked);
-      setUnlockingChar('hgte');
-      newFragments -= 78;
+      setUnlockingChar('ttd');
+      newTtdFragments -= 78;
     }
-    setHgteFragments(newFragments);
+    
+    setTtdFragments(newTtdFragments);
     setInventory(newInv);
     
     if (user) {
@@ -1218,14 +1454,14 @@ function GameContent() {
         await setDoc(doc(db, 'users', user.uid), {
           diamonds: diamonds - cost,
           inventory: newInv,
-          hgteFragments: newFragments,
+          ttdFragments: newTtdFragments,
           unlockedCharacters: newUnlocked
         }, { merge: true });
       } catch (error) {
         console.error("Gacha update error:", error);
         // If update fails, revert state
         setDiamonds(diamonds);
-        setHgteFragments(hgteFragments);
+        setTtdFragments(ttdFragments);
         setInventory(inventory);
         setUnlockedCharacters(unlockedCharacters);
         alert('数据同步失败，请检查网络连接。');
@@ -1239,7 +1475,11 @@ function GameContent() {
       if (diff > 0) itemsGained[k] = diff;
     });
     
-    setGachaResult({ fragments: fragmentsGained, items: itemsGained });
+    setGachaResult({
+      hgteFragments: 0,
+      ttdFragments: ttdFragmentsGained,
+      items: itemsGained
+    });
     setShowGachaResultModal(true);
   };
 
@@ -2010,7 +2250,11 @@ function GameContent() {
       hgtePartialCharges: 0,
       hgteSkillActive: 0,
       hgtePassiveUsed: false,
-      hxdActive: false
+      hxdActive: false,
+      ttdCombo: 0,
+      ttdMultiplier: 1,
+      ttdSuperJump: false,
+      ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 }
     };
     
     obstaclesRef.current = [];
@@ -2386,29 +2630,6 @@ function GameContent() {
     }
   };
 
-  const buyItem = async (type: PowerUpType) => {
-    const item = SHOP_ITEMS[type];
-    if (diamonds >= item.cost) {
-      const newDiamonds = diamonds - item.cost;
-      const newInventory = { ...inventory, [type]: (inventory[type] || 0) + 1 };
-      
-      setDiamonds(newDiamonds);
-      setInventory(newInventory);
-      
-      if (user) {
-        try {
-          await setDoc(doc(db, 'users', user.uid), {
-            diamonds: newDiamonds,
-            inventory: newInventory
-          }, { merge: true });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
-        }
-      }
-      playSound('score');
-    }
-  };
-
   const updateAvatar = async (charId: string) => {
     if (!user) return;
     setAvatarId(charId);
@@ -2484,6 +2705,23 @@ function GameContent() {
     initAudio();
     const player = playerRef.current;
     
+    if (selectedCharacter === 'ttd' && player.ttdEnergyBar.active) {
+      if (player.ttdEnergyBar.type === 'jump') {
+        player.ttdCombo++;
+        player.ttdMultiplier = Math.min(5, player.ttdMultiplier + 0.2);
+        setScore(s => s + Math.floor(50 * player.ttdMultiplier));
+        createParticles(player.x, player.y, '#ffeb3b', 20);
+        if (player.ttdCombo >= 5) {
+          player.ttdSuperJump = true;
+          player.ttdCombo = 0;
+        }
+      } else {
+        player.ttdCombo = 0;
+        player.ttdMultiplier = Math.max(1, player.ttdMultiplier - 0.2);
+      }
+      player.ttdEnergyBar.active = false;
+    }
+
     // Cancel slide if jumping and restore height/position immediately
     if (player.isSliding) {
       player.isSliding = false;
@@ -2492,11 +2730,14 @@ function GameContent() {
       player.height = 120;
     }
 
-    const maxJumpsAllowed = selectedCharacter === 'hgte' ? (player.hgtePassiveUsed ? 2 : 1) : MAX_JUMPS;
-    if (player.jumps < maxJumpsAllowed) {
+    let maxJumpsAllowed = MAX_JUMPS;
+    if (selectedCharacter === 'hgte') maxJumpsAllowed = player.hgtePassiveUsed ? 2 : 1;
+    if (selectedCharacter === 'ttd') maxJumpsAllowed = 3;
+
+    if (player.jumps < maxJumpsAllowed || player.ttdSuperJump) {
       playSound('jump');
       const currentBiome = BIOMES[envRef.current.biomeIndex];
-      player.vy = JUMP_STRENGTH * currentBiome.jumpMod;
+      player.vy = (player.ttdSuperJump ? JUMP_STRENGTH * 1.5 : JUMP_STRENGTH) * currentBiome.jumpMod;
       player.jumps++;
       player.isJumping = true;
       createParticles(player.x + player.width / 2, player.y + player.height, '#fff', 10);
@@ -2506,6 +2747,24 @@ function GameContent() {
   const slide = useCallback(() => {
     if (gameState !== 'playing') return;
     const player = playerRef.current;
+    
+    if (selectedCharacter === 'ttd' && player.ttdEnergyBar.active) {
+      if (player.ttdEnergyBar.type === 'crouch') {
+        player.ttdCombo++;
+        player.ttdMultiplier = Math.min(5, player.ttdMultiplier + 0.2);
+        setScore(s => s + Math.floor(50 * player.ttdMultiplier));
+        createParticles(player.x, player.y, '#ffeb3b', 20);
+        if (player.ttdCombo >= 5) {
+          player.ttdSuperJump = true;
+          player.ttdCombo = 0;
+        }
+      } else {
+        player.ttdCombo = 0;
+        player.ttdMultiplier = Math.max(1, player.ttdMultiplier - 0.2);
+      }
+      player.ttdEnergyBar.active = false;
+    }
+
     if (player.isJumping) {
       player.y = 10000; // Fast fall to ground
       player.vy = 2000; // High velocity to trigger landing particles
@@ -2517,7 +2776,7 @@ function GameContent() {
       player.y += 60; // Move down to stay on ground
       createParticles(player.x + player.width / 2, player.y + player.height, '#fff', 5);
     }
-  }, [gameState, createParticles]);
+  }, [gameState, createParticles, selectedCharacter]);
 
   const restore = useCallback(() => {
     if (gameState !== 'playing') return;
@@ -2596,6 +2855,25 @@ function GameContent() {
       if (player.hgteSkillActive > 0) player.hgteSkillActive -= dt;
       if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
+      
+      if (selectedCharacter === 'ttd') {
+        if (!player.ttdEnergyBar.active) {
+          if (Math.random() < 0.01 * dt) {
+            player.ttdEnergyBar.active = true;
+            player.ttdEnergyBar.type = Math.random() < 0.5 ? 'jump' : 'crouch';
+            player.ttdEnergyBar.maxTimer = 90;
+            player.ttdEnergyBar.timer = 90;
+          }
+        } else {
+          player.ttdEnergyBar.timer -= dt;
+          if (player.ttdEnergyBar.timer <= 0) {
+            player.ttdEnergyBar.active = false;
+            player.ttdCombo = 0;
+            player.ttdMultiplier = Math.max(1, player.ttdMultiplier - 0.1);
+          }
+        }
+      }
+
       if (player.dash > 0) {
         player.dash -= dt;
         if (player.dash <= 0) {
@@ -2649,7 +2927,8 @@ function GameContent() {
       // Continuous scoring
       setScore(s => {
         const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
-        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
+        const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
+        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult;
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
         
@@ -2801,6 +3080,16 @@ function GameContent() {
         player.vy = 0;
         player.isJumping = false;
         player.jumps = 0;
+        
+        if (player.ttdSuperJump) {
+          player.ttdSuperJump = false;
+          obstaclesRef.current.forEach(obs => {
+            createParticles(obs.x + obs.width / 2, obs.y + obs.height / 2, '#ff0000', 20);
+          });
+          obstaclesRef.current.length = 0;
+          playSound('hit');
+          setScore(s => s + Math.floor(500 * player.ttdMultiplier));
+        }
       }
 
       // Clouds (Parallax)
@@ -3046,7 +3335,8 @@ function GameContent() {
             
             // Bonus rewards
             const bossScoreReward = selectedCharacter === 'hjdj' ? 2000 : 1000;
-            setScore(s => s + bossScoreReward);
+            const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
+            setScore(s => s + Math.floor(bossScoreReward * ttdMult));
             const nextDiamonds = diamonds + 666;
             setDiamonds(nextDiamonds);
             if (user) {
@@ -3299,7 +3589,8 @@ function GameContent() {
             player.y + player.height > c.y) {
           c.collected = true;
           playSound('score');
-          setScore(s => s + 10);
+          const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
+          setScore(s => s + Math.floor(10 * ttdMult));
           createParticles(c.x + c.width/2, c.y + c.height/2, '#fbbf24', 15);
           coinsRef.current.splice(i, 1);
           continue;
@@ -3446,7 +3737,8 @@ function GameContent() {
             obstacles.splice(i, 1);
             setScore(s => {
               const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
-              const newScore = s + 5 * dashMultiplier;
+              const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
+              const newScore = s + Math.floor(5 * dashMultiplier * ttdMult);
               checkAchievements(newScore);
               
               if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -3517,7 +3809,8 @@ function GameContent() {
           playSound('score');
           setScore(s => {
             const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
-            const newScore = s + (player.doubleScore > 0 ? 2 : 1) * dashMultiplier;
+            const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
+            const newScore = s + Math.floor((player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult);
             checkAchievements(newScore);
             
             if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -4248,7 +4541,7 @@ function GameContent() {
                 </button>
               </div>
               <div className="p-6 grid grid-cols-2 gap-4">
-                {unlockedCharacters.map(charId => (
+                {Array.from(new Set(unlockedCharacters)).filter(id => ['hdd', 'santa', 'hjdj', 'hz', 'hgte', 'ttd'].includes(id)).map(charId => (
                   <button
                     key={charId}
                     onClick={() => updateAvatar(charId)}
@@ -4258,7 +4551,7 @@ function GameContent() {
                       <img src={getCharacterImage(charId)} alt={charId} className="h-full object-contain" />
                     </div>
                     <span className="text-sm font-black text-[#5d4037]">
-                      {charId === 'hdd' ? '呼大帝' : charId === 'santa' ? '圣诞老呼' : charId === 'hjdj' ? '海军大将' : charId === 'hgte' ? '呼刚帝尔' : '呼子'}
+                      {charId === 'hdd' ? '呼大帝' : charId === 'santa' ? '圣诞老呼' : charId === 'hjdj' ? '海军大将' : charId === 'hgte' ? '呼刚帝尔' : charId === 'ttd' ? '跳跳帝' : charId === 'hz' ? '呼子' : '未知'}
                     </span>
                   </button>
                 ))}
@@ -4766,10 +5059,24 @@ function GameContent() {
                 <h2 className="text-3xl font-black text-[#e65100]">抽奖结果</h2>
                 <button onClick={() => setShowGachaResultModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
               </div>
-              <div className="flex items-center gap-2 text-xl font-bold text-[#5d4037] mb-4">
-                获得碎片：
-                <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
-                <span className="text-blue-600 font-black text-2xl">x{gachaResult.fragments}</span>
+              <div className="flex flex-col items-center gap-3 mb-4">
+                {gachaResult.hgteFragments > 0 && (
+                  <div className="flex items-center gap-2 text-xl font-bold text-[#5d4037]">
+                    获得呼刚帝尔碎片：
+                    <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <span className="text-blue-600 font-black text-2xl">x{gachaResult.hgteFragments}</span>
+                  </div>
+                )}
+                {gachaResult.ttdFragments > 0 && (
+                  <div className="flex items-center gap-2 text-xl font-bold text-[#5d4037]">
+                    获得跳跳帝碎片：
+                    <img src="ttd.png" alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <span className="text-blue-600 font-black text-2xl">x{gachaResult.ttdFragments}</span>
+                  </div>
+                )}
+                {gachaResult.hgteFragments === 0 && gachaResult.ttdFragments === 0 && (
+                  <div className="text-gray-500 font-bold italic">本次未获得角色碎片</div>
+                )}
               </div>
               <div className="w-full text-center">
                 <p className="text-[#d84315] font-bold text-sm mb-2">获得道具：</p>
@@ -4796,12 +5103,21 @@ function GameContent() {
                 <button onClick={() => setShowInventoryModal(false)} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-md active:translate-y-1">X</button>
               </div>
               
-              <div className="w-full bg-[#ffcc80]/30 py-3 px-4 rounded-xl border-2 border-[#ffb300]/30 mb-4 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
-                  <span className="text-[#d84315] font-bold">呼刚帝尔碎片</span>
+              <div className="w-full space-y-2 mb-4">
+                <div className="bg-[#ffcc80]/30 py-3 px-4 rounded-xl border-2 border-[#ffb300]/30 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <img src={hgteImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <span className="text-[#d84315] font-bold">呼刚帝尔碎片</span>
+                  </div>
+                  <span className="text-blue-600 font-black text-xl">{hgteFragments}/78</span>
                 </div>
-                <span className="text-blue-600 font-black text-xl">{hgteFragments}</span>
+                <div className="bg-[#ffcc80]/30 py-3 px-4 rounded-xl border-2 border-[#ffb300]/30 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <img src="ttd.png" alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <span className="text-[#d84315] font-bold">跳跳帝碎片</span>
+                  </div>
+                  <span className="text-blue-600 font-black text-xl">{ttdFragments}/78</span>
+                </div>
               </div>
 
               <div className="w-full">
@@ -4867,6 +5183,275 @@ function GameContent() {
               >
                 {hasCheckedInToday ? '今日已签到' : '立即签到'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mailbox Modal */}
+        {showMailModal && (
+          <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-[#FFFDF0] w-full max-w-lg rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
+              <div className="p-6 flex justify-between items-center bg-[#FFFDF0] border-b-2 border-[#FAD689]">
+                <div className="flex items-center gap-3">
+                  <div className="bg-orange-400 p-2 rounded-xl">
+                    <Mail className="text-white" size={24} />
+                  </div>
+                  <h2 className="text-3xl font-black text-[#A65D2C] tracking-tight">我的邮件</h2>
+                </div>
+                <button onClick={() => { setShowMailModal(false); setSelectedMail(null); }} className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-hidden flex">
+                {/* Mail List */}
+                <div className={`flex-1 flex flex-col overflow-y-auto p-4 gap-3 ${selectedMail ? 'hidden md:flex' : 'flex'}`}>
+                  {mails.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-[#A65D2C] opacity-50">
+                      <Bell size={48} className="mb-4" />
+                      <p className="font-bold">邮件空空如也</p>
+                    </div>
+                  ) : (
+                    mails.map(mail => (
+                      <button 
+                        key={mail.id}
+                        onClick={() => { setSelectedMail(mail); markMailAsRead(mail); }}
+                        className={`flex flex-col p-4 rounded-2xl border-2 transition-all text-left relative ${
+                          selectedMail?.id === mail.id 
+                            ? 'bg-[#FAD689] border-[#A65D2C] shadow-inner' 
+                            : 'bg-white border-[#FAD689] hover:border-[#F9C75C] shadow-sm'
+                        }`}
+                      >
+                        {!mail.isRead && (
+                          <div className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
+                        )}
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-black text-[#A65D2C] line-clamp-1 pr-4">{mail.title}</span>
+                          <span className="text-[10px] text-[#A65D2C] opacity-60 whitespace-nowrap">
+                            {mail.timestamp?.toDate ? mail.timestamp.toDate().toLocaleDateString() : '刚刚'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#A65D2C] opacity-70 line-clamp-1">{mail.content}</p>
+                        <div className="mt-2 flex items-center gap-1">
+                          <span className="text-[10px] bg-[#A65D2C]/10 text-[#A65D2C] px-2 py-0.5 rounded-full font-bold">
+                            来自: {mail.sender}
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* Mail Content */}
+                {selectedMail && (
+                  <div className="flex-[1.5] flex flex-col bg-white border-l-2 border-[#FAD689] overflow-y-auto">
+                    <div className="p-6 flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-6">
+                        <h3 className="text-2xl font-black text-[#A65D2C] leading-tight">{selectedMail.title}</h3>
+                        <button 
+                          onClick={() => deleteMail(selectedMail.id)}
+                          className="text-red-400 hover:text-red-600 p-2"
+                          title="删除邮件"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#FAD689]/30">
+                        <div className="w-10 h-10 bg-[#FAD689] rounded-full flex items-center justify-center font-bold text-[#A65D2C]">
+                          {selectedMail.sender[0]}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[#A65D2C]">{selectedMail.sender}</span>
+                          <span className="text-xs text-[#A65D2C] opacity-60">
+                            {selectedMail.timestamp?.toDate ? selectedMail.timestamp.toDate().toLocaleString() : '刚刚'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 text-[#A65D2C] leading-relaxed whitespace-pre-wrap text-sm">
+                        {selectedMail.content}
+                      </div>
+
+                      {selectedMail.rewards && selectedMail.rewards.length > 0 && (
+                        <div className="mt-6 p-4 bg-white rounded-2xl border-2 border-[#FAD689]">
+                          <h4 className="font-bold text-[#A65D2C] mb-3">附件奖励</h4>
+                          <div className="flex flex-wrap gap-3">
+                            {selectedMail.rewards.map((reward: any, index: number) => (
+                              <div key={index} className="flex items-center gap-2 bg-[#FFF0D4] px-3 py-2 rounded-xl border border-[#FAD689]">
+                                <span className="text-lg">
+                                  {reward.type === 'diamonds' ? '💎' : 
+                                   reward.type === 'hgteFragments' ? '🧩' : 
+                                   reward.type === 'ttdFragments' ? '🧩' : 
+                                   reward.type.startsWith('char_') ? '👤' : 
+                                   POWERUP_CONFIG[reward.type as PowerUpType]?.icon || '🎁'}
+                                </span>
+                                <span className="font-bold text-[#A65D2C]">
+                                  {reward.type === 'diamonds' ? '钻石' : 
+                                   reward.type === 'hgteFragments' ? 'HGTE碎片' : 
+                                   reward.type === 'ttdFragments' ? 'TTD碎片' : 
+                                   reward.type === 'char_santa' ? '角色: 圣诞老人' : 
+                                   reward.type === 'char_hjdj' ? '角色: 皇家大鸡' : 
+                                   reward.type === 'char_hz' ? '角色: 猴子' : 
+                                   reward.type === 'char_hgte' ? '角色: HGTE' : 
+                                   reward.type === 'char_ttd' ? '角色: TTD' : 
+                                   POWERUP_CONFIG[reward.type as PowerUpType]?.label || reward.type}
+                                </span>
+                                <span className="font-black text-[#e65100]">x{reward.amount}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-8 pt-6 border-t border-[#FAD689]/30 flex justify-end">
+                        <button 
+                          onClick={() => setSelectedMail(null)}
+                          className="md:hidden bg-[#FAD689] text-[#A65D2C] font-bold px-6 py-2 rounded-xl"
+                        >
+                          返回列表
+                        </button>
+                        <div className="hidden md:flex items-center gap-2 text-[#4CAF50] font-bold text-sm">
+                          <CheckCircle2 size={16} /> 已读
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Mail Modal */}
+        {showAdminMailModal && (
+          <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-[#FFFDF0] w-full max-w-lg rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
+              <div className="p-6 flex justify-between items-center bg-[#FFFDF0] border-b-2 border-[#FAD689]">
+                <h2 className="text-3xl font-black text-[#A65D2C] tracking-tight">发送邮件</h2>
+                <button onClick={() => setShowAdminMailModal(false)} className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-gradient-to-b from-[#FFFDF0] to-[#FFF0D4]">
+                <div>
+                  <label className="block text-[#A65D2C] font-bold mb-2">收件人</label>
+                  <select 
+                    value={adminMailData.recipientId}
+                    onChange={(e) => setAdminMailData({...adminMailData, recipientId: e.target.value})}
+                    className="w-full border-2 border-[#FAD689] rounded-xl px-4 py-3 bg-white text-black focus:border-[#4CAF50] focus:outline-none"
+                  >
+                    <option value="all">所有玩家 (全服邮件)</option>
+                    {allUsers.map(u => (
+                      <option key={u.uid} value={u.uid}>{u.name} ({u.uid.substring(0, 6)}...)</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[#A65D2C] font-bold mb-2">标题</label>
+                  <input 
+                    type="text" 
+                    value={adminMailData.title}
+                    onChange={(e) => setAdminMailData({...adminMailData, title: e.target.value})}
+                    placeholder="邮件标题"
+                    className="w-full border-2 border-[#FAD689] rounded-xl px-4 py-3 bg-white text-black focus:border-[#4CAF50] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A65D2C] font-bold mb-2">内容</label>
+                  <textarea 
+                    value={adminMailData.content}
+                    onChange={(e) => setAdminMailData({...adminMailData, content: e.target.value})}
+                    placeholder="邮件内容"
+                    rows={5}
+                    className="w-full border-2 border-[#FAD689] rounded-xl px-4 py-3 bg-white text-black focus:border-[#4CAF50] focus:outline-none resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#A65D2C] font-bold mb-2">附加奖励</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['diamonds', 'shield', 'magnet', 'doubleScore', 'dash', 'hgteFragments', 'ttdFragments', 'char_santa', 'char_hjdj', 'char_hz', 'char_hgte', 'char_ttd'].map(type => {
+                      const label = type === 'diamonds' ? '钻石' : 
+                                    type === 'shield' ? '护盾' : 
+                                    type === 'magnet' ? '磁铁' : 
+                                    type === 'doubleScore' ? '双倍积分' : 
+                                    type === 'dash' ? '冲刺' : 
+                                    type === 'hgteFragments' ? 'HGTE碎片' : 
+                                    type === 'ttdFragments' ? 'TTD碎片' : 
+                                    type === 'char_santa' ? '角色: 圣诞老人' : 
+                                    type === 'char_hjdj' ? '角色: 皇家大鸡' : 
+                                    type === 'char_hz' ? '角色: 猴子' : 
+                                    type === 'char_hgte' ? '角色: HGTE' : 
+                                    type === 'char_ttd' ? '角色: TTD' : type;
+                      return (
+                      <button
+                        key={type}
+                        onClick={() => {
+                          const existing = adminMailRewards.find(r => r.type === type);
+                          if (existing) {
+                            setAdminMailRewards(adminMailRewards.filter(r => r.type !== type));
+                          } else {
+                            setAdminMailRewards([...adminMailRewards, { type, amount: 1 }]);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-full text-sm font-bold border-2 transition-colors ${
+                          adminMailRewards.some(r => r.type === type)
+                            ? 'bg-[#4CAF50] text-white border-[#4CAF50]'
+                            : 'bg-white text-[#A65D2C] border-[#FAD689] hover:bg-[#FFF0D4]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )})}
+                  </div>
+                  {adminMailRewards.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      {adminMailRewards.map(reward => {
+                        const label = reward.type === 'diamonds' ? '钻石' : 
+                                      reward.type === 'shield' ? '护盾' : 
+                                      reward.type === 'magnet' ? '磁铁' : 
+                                      reward.type === 'doubleScore' ? '双倍积分' : 
+                                      reward.type === 'dash' ? '冲刺' : 
+                                      reward.type === 'hgteFragments' ? 'HGTE碎片' : 
+                                      reward.type === 'ttdFragments' ? 'TTD碎片' : 
+                                      reward.type === 'char_santa' ? '角色: 圣诞老人' : 
+                                      reward.type === 'char_hjdj' ? '角色: 皇家大鸡' : 
+                                      reward.type === 'char_hz' ? '角色: 猴子' : 
+                                      reward.type === 'char_hgte' ? '角色: HGTE' : 
+                                      reward.type === 'char_ttd' ? '角色: TTD' : reward.type;
+                        return (
+                        <div key={reward.type} className="flex items-center gap-2 bg-white p-2 rounded-lg border-2 border-[#FAD689]">
+                          <span className="font-bold text-[#A65D2C] w-32 truncate" title={label}>
+                            {label}
+                          </span>
+                          {!reward.type.startsWith('char_') && (
+                            <input 
+                              type="number" 
+                              min="1"
+                              value={reward.amount}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                setAdminMailRewards(adminMailRewards.map(r => r.type === reward.type ? { ...r, amount: val } : r));
+                              }}
+                              className="flex-1 border-2 border-[#FAD689] rounded-lg px-2 py-1 text-center focus:border-[#4CAF50] focus:outline-none"
+                            />
+                          )}
+                          {reward.type.startsWith('char_') && (
+                            <span className="flex-1 text-center text-[#4CAF50] font-bold">1</span>
+                          )}
+                        </div>
+                      )})}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={sendAdminMail}
+                  className="mt-4 w-full py-3 rounded-2xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#1976D2,0_10px_20px_rgba(0,0,0,0.4)] active:translate-y-2 active:shadow-[0_0px_0_#1976D2] transition-transform"
+                  style={{ background: 'linear-gradient(to bottom, #64B5F6, #2196F3, #1976D2)', textShadow: '1px 1px 0 #0D47A1, -1px -1px 0 #0D47A1, 1px -1px 0 #0D47A1, -1px 1px 0 #0D47A1' }}
+                >
+                  发送邮件
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -5278,7 +5863,7 @@ function GameContent() {
                 <span className="font-mono text-blue-400 font-bold text-lg">{diamonds}</span>
               </div>
               <div className="bg-black/50 px-4 py-1 rounded-full border border-white/20 flex flex-col items-end">
-                <span className="font-mono text-yellow-400 font-bold text-xl leading-none">{score}</span>
+                <span className="font-mono text-yellow-400 font-bold text-xl leading-none">{Math.floor(score)}</span>
                 {isMultiplayer && opponent && (
                   <span className="font-mono text-red-400 font-bold text-xs mt-1">对手: {opponent.score}</span>
                 )}
@@ -5351,6 +5936,29 @@ function GameContent() {
               </button>
             ))}
           </div>
+        )}
+
+        {/* Crouch Button */}
+        {gameState === 'playing' && (
+          <div className="absolute bottom-4 left-4 z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                slide();
+              }}
+              className="w-16 h-16 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden bg-blue-500 border-blue-300 shadow-[0_6px_0_#1d4ed8] active:translate-y-1 active:shadow-none"
+            >
+              <img src="xd.png" alt="Crouch" className="w-full h-full object-cover" />
+            </button>
+            <div className="text-center mt-1">
+              <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">下蹲</span>
+            </div>
+          </div>
+        )}
+
+        {/* TTD UI */}
+        {gameState === 'playing' && (
+          <TtdUI playerRef={playerRef} selectedCharacter={selectedCharacter} />
         )}
 
         {/* Hjdj Skill Button */}
@@ -5492,26 +6100,34 @@ function GameContent() {
                             退出登录
                           </button>
                           {(user.displayName === 'hdd' || user.email === 'butanyueye@gmail.com') && (
-                            <button 
-                              onClick={async () => {
-                                try {
-                                  const matchesRef = collection(db, 'matches');
-                                  const q = query(matchesRef);
-                                  const snapshot = await getDocs(q);
-                                  const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-                                  await Promise.all(deletePromises);
-                                  setToastMessage('匹配记录已清空');
-                                  setTimeout(() => setToastMessage(''), 3000);
-                                } catch (e) {
-                                  console.error(e);
-                                  setToastMessage('清空失败');
-                                  setTimeout(() => setToastMessage(''), 3000);
-                                }
-                              }}
-                              className="text-[10px] text-orange-400 font-bold hover:text-orange-300"
-                            >
-                              清空匹配
-                            </button>
+                            <div className="flex gap-2 mt-0.5">
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    const matchesRef = collection(db, 'matches');
+                                    const q = query(matchesRef);
+                                    const snapshot = await getDocs(q);
+                                    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                                    await Promise.all(deletePromises);
+                                    setToastMessage('匹配记录已清空');
+                                    setTimeout(() => setToastMessage(''), 3000);
+                                  } catch (e) {
+                                    console.error(e);
+                                    setToastMessage('清空失败');
+                                    setTimeout(() => setToastMessage(''), 3000);
+                                  }
+                                }}
+                                className="text-[10px] text-orange-400 font-bold hover:text-orange-300"
+                              >
+                                清空匹配
+                              </button>
+                              <button 
+                                onClick={openAdminMailModal}
+                                className="text-[10px] text-blue-400 font-bold hover:text-blue-300"
+                              >
+                                发送邮件
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
@@ -5565,21 +6181,26 @@ function GameContent() {
                   </div>
                   <div className="flex flex-col items-center">
                     <button 
+                      onClick={() => setShowMailModal(true)}
+                      className="w-14 h-14 bg-orange-400 rounded-2xl flex items-center justify-center border-4 border-orange-200 shadow-lg transform -rotate-3 relative"
+                    >
+                      <Mail className="text-white" size={28} />
+                      {mails.filter(m => !m.isRead).length > 0 && (
+                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white animate-bounce">
+                          {mails.filter(m => !m.isRead).length}
+                        </div>
+                      )}
+                    </button>
+                    <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>邮件</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <button 
                       onClick={() => setGameState('leaderboard')}
                       className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center border-4 border-gray-200 shadow-lg transform -rotate-6"
                     >
                       <Megaphone className="text-blue-500" size={28} fill="currentColor" />
                     </button>
                     <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>排行榜</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <button 
-                      onClick={() => setGameState('shop')}
-                      className="w-14 h-14 bg-gradient-to-b from-yellow-200 to-yellow-500 rounded-2xl flex items-center justify-center border-4 border-yellow-100 shadow-lg transform rotate-3"
-                    >
-                      <Package className="text-yellow-800" size={28} />
-                    </button>
-                    <span className="text-white font-bold mt-1 text-sm text-shadow-sm" style={{ textShadow: '1px 1px 2px black' }}>商店</span>
                   </div>
                 </div>
 
@@ -5673,24 +6294,48 @@ function GameContent() {
                 </div>
                 
                 <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh] text-[#5d4037]">
-                  <h3 className="text-xl font-black text-center text-[#e65100]">【03.20版本更新公告】</h3>
-                  <p className="font-bold">本次更新带来了全新的奖励关卡及BOSS机制调整，具体内容如下：</p>
+                  <h3 className="text-xl font-black text-center text-[#e65100]">📢 《呼大帝快跑》版本更新公告</h3>
+                  <p className="font-bold">亲爱的跑酷者：</p>
+                  <p className="font-medium">为了提升游戏的操作深度并丰富收集体验，我们于今日完成了一次重磅更新！本次更新不仅增加了全新的操作维度，还带来了强力新角色及安卓原生支持。</p>
                   
-                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
-                    <h4 className="font-black text-[#e65100] mb-2">一、全新奖励关卡</h4>
-                    <p className="font-bold mb-1">黑洞奇遇全面升级：</p>
-                    <ul className="list-disc pl-5 space-y-1 font-medium">
-                      <li><span className="font-bold">视觉重制：</span>进入黑洞后将来到全新的赛博朋克风格星空隧道。</li>
-                      <li><span className="font-bold">金币狂欢：</span>奖励关卡内布满闪闪发光的金币，每收集一个金币将直接增加 <span className="text-[#e65100] font-black">10分</span>！</li>
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">🎮 新增操作：下蹲功能 (Crouch)</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">新增下蹲键：</span>我们在游戏界面右下方新增了下蹲按钮。</li>
+                      <li><span className="font-bold text-[#d84315]">躲避高位障碍：</span>现在您可以点击下蹲键或按下键盘的 <span className="bg-gray-200 px-1 rounded">↓</span> / <span className="bg-gray-200 px-1 rounded">S</span> 键进行滑行下蹲，从而躲避那些无法通过跳跃避开的高位障碍物。</li>
+                      <li><span className="font-bold text-[#d84315]">操作优化：</span>下蹲过程中可以随时衔接跳跃，操作手感更加丝滑。</li>
                     </ul>
                   </div>
 
-                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30">
-                    <h4 className="font-black text-[#e65100] mb-2">二、奶帝（BOSS）机制调整</h4>
-                    <ul className="list-disc pl-5 space-y-2 font-medium">
-                      <li><span className="font-bold">首次降临：</span>奶帝的出现不再依赖分数，现在玩家在游戏中存活满 <span className="text-[#e65100] font-black">1分钟</span> 时，奶帝将首次出现。</li>
-                      <li><span className="font-bold">后续追击：</span>击败奶帝后，经过 <span className="text-[#e65100] font-black">2分钟</span> 的冷却时间，奶帝会再次降临，考验你的生存极限！</li>
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">👤 新角色登场</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">跳跳帝 (TTD)：</span>极具动感的限定角色，现已同步上线。</li>
+                      <li><span className="font-bold text-[#d84315]">解锁方式：</span>新角色可通过收集 <span className="text-blue-600 font-black">78 个角色碎片</span> 进行合成解锁。</li>
                     </ul>
+                  </div>
+
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">🎡 召唤系统 & 背包优化</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">跳跳帝限定池：</span>限定召唤现已更新为“跳跳帝专属奖池”，碎片产出概率大幅提升至 <span className="text-blue-600 font-black">20%</span>。</li>
+                      <li><span className="font-bold text-[#d84315]">碎片进度追踪：</span>背包和角色选择界面现在会清晰显示呼刚帝尔与跳跳帝碎片的收集进度（x/78）。</li>
+                      <li><span className="font-bold text-[#d84315]">抽奖结果展示：</span>优化了抽奖结果弹窗，现在会分别列出获得的各类碎片和道具。</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">🛠️ 其他优化</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">界面微调：</span>缩小了限定召唤弹窗的尺寸，使其在各种屏幕下更加精致。</li>
+                      <li><span className="font-bold text-[#d84315]">数据同步：</span>强化了碎片获取与解锁状态的云端同步稳定性。</li>
+                    </ul>
+                  </div>
+
+                  <p className="font-bold text-center mt-4">感谢您对《呼大帝快跑》的支持！快进入游戏，尝试全新的下蹲操作，挑战更高的分数吧！</p>
+                  <div className="text-right text-sm font-bold text-[#5d4037]">
+                    <p>《呼大帝快跑》开发组</p>
+                    <p>2026年3月24日</p>
                   </div>
                 </div>
 
@@ -5753,22 +6398,33 @@ function GameContent() {
                       img: hgteImg,
                       skill: '技能：挥棒',
                       desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物，扔出“呼小帝”前无法二段跳。初始3次充能，捡起2次掉落物可充能1次，最多充能6次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。扔出后解锁二段跳。'
+                    },
+                    {
+                      id: 'ttd',
+                      name: '跳跳帝',
+                      img: 'ttd.png',
+                      skill: '技能：三段跳',
+                      desc: '三段跳，按照能量条指示的操作（只有蹲或跳）获得额外分数，连续做对五次会进行超高一跳，落地摧毁屏幕中所有障碍物，每次超高一跳会永久增加10%得分倍率，上限400%。'
                     }
                   ].map(char => {
                     const isUnlocked = unlockedCharacters.includes(char.id);
                     const canUnlock = highScore >= CHARACTER_REQUIREMENTS[char.id];
                     const reqScore = CHARACTER_REQUIREMENTS[char.id];
+                    const isTtd = char.id === 'ttd';
                     const isHgte = char.id === 'hgte';
+                    const isFragmentChar = isTtd || isHgte;
 
                     return (
                       <div 
                         key={char.id}
                         onClick={() => { 
-                          if (isHgte && !isUnlocked) {
-                            if (hgteFragments >= 78) {
+                          if (isFragmentChar && !isUnlocked) {
+                            const fragments = char.id === 'ttd' ? ttdFragments : hgteFragments;
+                            const charName = char.id === 'ttd' ? '跳跳帝' : '呼刚帝尔';
+                            if (fragments >= 78) {
                               alert('碎片已集齐，请点击卡片上的【合成角色】按钮解锁！');
                             } else {
-                              alert('未拥有呼刚帝尔角色，请前往限定池获取碎片！');
+                              alert(`未拥有${charName}角色，请前往限定池获取碎片！`);
                             }
                             return;
                           }
@@ -5786,9 +6442,14 @@ function GameContent() {
                         {!isUnlocked && (
                           <div className="absolute inset-0 z-20 bg-black/10 flex flex-col items-center justify-center rounded-xl backdrop-blur-[1px]">
                             <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
-                              <Lock size={10} /> {isHgte ? <span className="flex items-center gap-1"><img src={hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> {hgteFragments}/78</span> : `需达到 ${reqScore} 分`}
+                              <Lock size={10} /> {isFragmentChar ? (
+                                <span className="flex items-center gap-1">
+                                  <img src={char.id === 'ttd' ? 'ttd.png' : hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> 
+                                  {(char.id === 'ttd' ? ttdFragments : hgteFragments)}/78
+                                </span>
+                              ) : `需达到 ${reqScore} 分`}
                             </div>
-                            {(canUnlock && !isHgte) && (
+                            {(canUnlock && !isFragmentChar) && (
                               <button 
                                 onClick={(e) => { e.stopPropagation(); unlockCharacter(char.id); }}
                                 className="bg-green-500 text-white px-4 py-1 rounded-full text-xs font-black shadow-[0_4px_0_#2e7d32] active:translate-y-1 active:shadow-none animate-bounce"
@@ -5796,19 +6457,22 @@ function GameContent() {
                                 点击解锁
                               </button>
                             )}
-                            {(isHgte && hgteFragments >= 78) && (
+                            {(isFragmentChar && (char.id === 'ttd' ? ttdFragments : hgteFragments) >= 78) && (
                               <button 
                                 onClick={async (e) => { 
                                   e.stopPropagation(); 
                                   if (user) {
-                                    const newUnlocked = [...unlockedCharacters, 'hgte'];
+                                    const charId = char.id;
+                                    const newUnlocked = [...unlockedCharacters, charId];
                                     setUnlockedCharacters(newUnlocked);
-                                    setUnlockingChar('hgte');
-                                    setHgteFragments(prev => prev - 78);
+                                    setUnlockingChar(charId as any);
+                                    if (charId === 'ttd') setTtdFragments(prev => prev - 78);
+                                    else setHgteFragments(prev => prev - 78);
+                                    
                                     try {
                                       await setDoc(doc(db, 'users', user.uid), {
                                         unlockedCharacters: newUnlocked,
-                                        hgteFragments: hgteFragments - 78
+                                        [charId === 'ttd' ? 'ttdFragments' : 'hgteFragments']: (charId === 'ttd' ? ttdFragments : hgteFragments) - 78
                                       }, { merge: true });
                                     } catch (error) {
                                       handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
@@ -5858,7 +6522,7 @@ function GameContent() {
           {gameState === 'gameover' && !isMultiplayer && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30">
               <h2 className="text-5xl font-black text-red-500 mb-2 tracking-tighter drop-shadow-lg" style={{ WebkitTextStroke: '1px white' }}>GAME OVER</h2>
-              <p className="text-2xl text-white mb-10 font-medium">Score: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
+              <p className="text-2xl text-white mb-10 font-medium">Score: <span className="font-mono text-yellow-400 font-bold">{Math.floor(score)}</span></p>
               
               <div className="flex flex-col gap-4 w-full px-10">
                 {reviveCount < 3 && (
@@ -5901,7 +6565,7 @@ function GameContent() {
           {gameState === 'gameover' && isMultiplayer && matchState !== 'finished' && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30">
               <h2 className="text-4xl font-black text-white mb-4 tracking-tighter drop-shadow-lg">等待对手结束...</h2>
-              <p className="text-xl text-white/80 mb-8 font-medium">你的最终得分: <span className="font-mono text-yellow-400 font-bold">{score}</span></p>
+              <p className="text-xl text-white/80 mb-8 font-medium">你的最终得分: <span className="font-mono text-yellow-400 font-bold">{Math.floor(score)}</span></p>
               <div className="w-16 h-16 border-4 border-t-blue-500 border-r-transparent border-b-blue-500 border-l-transparent rounded-full animate-spin mb-8"></div>
               <button 
                 onClick={() => {
@@ -6079,7 +6743,7 @@ function GameContent() {
                 <div className="flex justify-between w-full items-center mb-8 relative z-10 bg-black/30 p-4 rounded-2xl">
                   <div className="flex flex-col items-center">
                     <span className="text-white font-bold mb-1">你</span>
-                    <span className="text-3xl font-mono text-yellow-400">{score}</span>
+                    <span className="text-3xl font-mono text-yellow-400">{Math.floor(score)}</span>
                   </div>
                   <div className="text-2xl font-black text-white/50">VS</div>
                   <div className="flex flex-col items-center">
@@ -6301,62 +6965,6 @@ function GameContent() {
             )}
           </AnimatePresence>
 
-          {/* Shop Modal */}
-          {gameState === 'shop' && (
-            <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30 px-6">
-              <div className="bg-[#fff8e1] w-full max-w-sm rounded-3xl p-6 border-4 border-[#ffb300] shadow-[0_10px_0_#ff8f00,0_15px_20px_rgba(0,0,0,0.5)] flex flex-col items-center">
-                <div className="w-full flex justify-between items-center mb-4">
-                  <h2 className="text-3xl font-black text-[#e65100]">游戏商店</h2>
-                  <button onClick={() => setGameState('start')} className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">X</button>
-                </div>
-
-                <div className="w-full bg-black/10 rounded-2xl p-3 mb-6 flex items-center justify-center gap-2 border-2 border-[#ffb300]/20">
-                  <span className="text-2xl">💎</span>
-                  <span className="text-2xl font-black text-blue-600 font-mono">{diamonds}</span>
-                </div>
-                
-                <div className="flex flex-col gap-3 w-full mb-6 max-h-[350px] overflow-y-auto pr-2">
-                  {(Object.entries(SHOP_ITEMS) as [PowerUpType, any][]).map(([type, item]) => (
-                    <div key={type} className="bg-white p-3 rounded-2xl border-2 border-gray-200 flex items-center gap-4">
-                      <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center text-3xl shrink-0">
-                        {POWERUP_CONFIG[type].icon}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-black text-[#5d4037]">{item.name}</span>
-                          <span className="text-xs font-bold text-gray-400">拥有: {inventory[type]}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 font-bold leading-tight mb-2">{item.description}</p>
-                        <button 
-                          onClick={() => buyItem(type)}
-                          disabled={diamonds < item.cost}
-                          className={`w-full py-1.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                                diamonds >= item.cost 
-                                ? 'bg-blue-500 text-white shadow-[0_3px_0_#1d4ed8] active:translate-y-1 active:shadow-none' 
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <>
-                            <span>💎 {item.cost}</span>
-                            <span className="border-l border-white/20 pl-2">购买</span>
-                          </>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <button 
-                  onClick={() => setGameState('start')}
-                  className="w-full py-3 rounded-2xl font-black text-xl text-white border-4 border-white shadow-[0_6px_0_#43a047,0_10px_20px_rgba(0,0,0,0.4)] transition-transform active:translate-y-2 active:shadow-[0_0px_0_#43a047]"
-                  style={{ background: 'linear-gradient(to bottom, #a5d6a7, #66bb6a, #4caf50)', textShadow: '1px 1px 0 #2e7d32, -1px -1px 0 #2e7d32, 1px -1px 0 #2e7d32, -1px 1px 0 #2e7d32' }}
-                >
-                  返回
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Instructions Modal */}
           {gameState === 'instructions' && (
             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-md z-30 px-6">
@@ -6479,38 +7087,38 @@ function GameContent() {
           {/* Gacha Screen */}
           {gameState === 'gacha' && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-              <div className="bg-[#fff8e1] p-6 rounded-3xl border-4 border-[#ffb300] shadow-2xl w-full max-w-md relative">
+              <div className="bg-[#fff8e1] p-4 rounded-3xl border-4 border-[#ffb300] shadow-2xl w-full max-w-[340px] relative">
                 <button onClick={() => setGameState('start')} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
-                  <X size={24} />
+                  <X size={20} />
                 </button>
-                <h2 className="text-3xl font-black text-[#e65100] mb-4 text-center">限定召唤</h2>
-                <div className="w-full h-48 bg-gradient-to-b from-yellow-100 to-yellow-300 rounded-2xl mb-4 flex items-center justify-center border-4 border-white shadow-inner">
-                  <img src={getCharacterImage('hgte')} alt="限定角色" className="h-40 object-contain" />
+                <h2 className="text-2xl font-black text-[#e65100] mb-3 text-center">限定召唤</h2>
+                <div className="w-full h-32 bg-gradient-to-b from-yellow-100 to-yellow-300 rounded-2xl mb-3 flex items-center justify-center border-4 border-white shadow-inner overflow-hidden">
+                  <img src={getCharacterImage('ttd')} alt="限定角色" className="h-24 object-contain drop-shadow-lg" />
                 </div>
-                <div className="bg-white p-4 rounded-2xl mb-4 border-2 border-[#ffe082]">
-                  <h3 className="font-bold text-[#5d4037] mb-2">奖池预览</h3>
-                  <div className="grid grid-cols-5 gap-2 text-center text-[10px]">
+                <div className="bg-white p-3 rounded-2xl mb-3 border-2 border-[#ffe082]">
+                  <h3 className="font-bold text-[#5d4037] text-xs mb-1 text-center">跳跳帝限定奖池</h3>
+                  <div className="grid grid-cols-5 gap-1 text-center text-[8px]">
                     {[
                       { name: '护盾', icon: POWERUP_CONFIG['shield'].icon },
                       { name: '磁铁', icon: POWERUP_CONFIG['magnet'].icon },
-                      { name: '双倍积分', icon: POWERUP_CONFIG['doubleScore'].icon },
+                      { name: '双倍', icon: POWERUP_CONFIG['doubleScore'].icon },
                       { name: '冲刺', icon: POWERUP_CONFIG['dash'].icon },
-                      { name: '碎片', img: hgteImg }
+                      { name: '碎片', img: 'ttd.png' }
                     ].map((item, i) => (
-                      <div key={i} className="bg-gray-100 p-2 rounded-lg font-bold text-[#795548] flex flex-col items-center justify-center">
+                      <div key={i} className="bg-gray-100 p-1 rounded-lg font-bold text-[#795548] flex flex-col items-center justify-center">
                         {item.img ? (
-                          <img src={item.img} alt={item.name} className="w-6 h-6 object-contain mb-1 drop-shadow-sm" />
+                          <img src={item.img} alt={item.name} className="w-5 h-5 object-contain mb-1" />
                         ) : (
-                          <span className="text-xl mb-1">{item.icon}</span>
+                          <span className="text-lg mb-1">{item.icon}</span>
                         )}
-                        {item.name}<br/>20%
+                        {item.name}
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-4">
-                  <button onClick={() => handleGacha(1)} className="flex-1 bg-blue-500 text-white font-black py-3 rounded-2xl">单抽 91💎</button>
-                  <button onClick={() => handleGacha(10)} className="flex-1 bg-red-500 text-white font-black py-3 rounded-2xl">十连 800💎</button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleGacha(1)} className="flex-1 bg-blue-500 text-white font-black py-2 rounded-xl text-sm shadow-[0_4px_0_#1565c0] active:translate-y-1 active:shadow-none">单抽 91💎</button>
+                  <button onClick={() => handleGacha(10)} className="flex-1 bg-red-500 text-white font-black py-2 rounded-xl text-sm shadow-[0_4px_0_#c62828] active:translate-y-1 active:shadow-none">十连 800💎</button>
                 </div>
               </div>
             </div>

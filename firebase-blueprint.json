@@ -48,7 +48,9 @@
         "rankPoints": { "type": "integer", "description": "The user's rank points" },
         "rankedWins": { "type": "integer", "description": "The user's ranked wins" },
         "rankedTotal": { "type": "integer", "description": "The user's total ranked games" },
-        "lastRankedWinDate": { "type": "string", "description": "The date of the user's last ranked win" }
+        "lastRankedWinDate": { "type": "string", "description": "The date of the user's last ranked win" },
+        "hgteFragments": { "type": "integer", "description": "Number of fragments for character HGTE" },
+        "ttdFragments": { "type": "integer", "description": "Number of fragments for character TTD" }
       },
       "required": ["userId", "highScore", "totalGames", "achievements", "diamonds", "inventory", "unlockedCharacters"]
     },
@@ -107,6 +109,31 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fromUid", "fromName", "toUid", "matchId", "status", "createdAt"]
+    },
+    "Mail": {
+      "title": "Mail",
+      "description": "A system or user-to-user message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientId": { "type": "string", "description": "UID or 'all' for global announcements" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "sender": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isRead": { "type": "boolean" },
+        "rewards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "amount": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "required": ["recipientId", "title", "content", "sender", "timestamp"]
     }
   },
   "firestore": {
@@ -129,6 +156,10 @@
     "/invitations/{invitationId}": {
       "schema": "Invitation",
       "description": "Game invitations"
+    },
+    "/mails/{mailId}": {
+      "schema": "Mail",
+      "description": "System and user messages"
     }
   }
 }

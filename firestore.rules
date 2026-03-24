@@ -83,7 +83,7 @@ service cloud.firestore {
 
     function isValidUserStatsCreate(data) {
       return hasRequiredFields(['userId', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements']) &&
-             hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'photoUrl', 'displayName', 'role', 'updatedAt', 'lastLoginAt', 'providerId', 'tenantId', 'emailVerified', 'isAnonymous']) &&
+             hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'ttdFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'photoUrl', 'displayName', 'role', 'updatedAt', 'lastLoginAt', 'providerId', 'tenantId', 'emailVerified', 'isAnonymous']) &&
              validStringLength(data, 'userId', 1, 100) &&
              (!('name' in data) || data.name == null || validStringLength(data, 'name', 0, 200)) &&
              (!('email' in data) || data.email == null || validStringLength(data, 'email', 0, 200)) &&
@@ -96,6 +96,7 @@ service cloud.firestore {
              (!('avatarId' in data) || data.avatarId == null || validStringLength(data, 'avatarId', 0, 2000)) &&
              (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
              (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
+             (!('ttdFragments' in data) || isPositiveNumber(data, 'ttdFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
              (!('unlockedTitles' in data) || isValidList(data, 'unlockedTitles', 100)) &&
              (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength(data, 'selectedFrame', 1, 50)) &&
@@ -126,7 +127,7 @@ service cloud.firestore {
     }
 
     function isValidUserStatsUpdate(data) {
-      return hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'photoUrl', 'displayName', 'role', 'updatedAt', 'lastLoginAt', 'providerId', 'tenantId', 'emailVerified', 'isAnonymous']) &&
+      return hasOnlyAllowedFields(['userId', 'uid', 'name', 'email', 'highScore', 'totalGames', 'diamonds', 'inventory', 'achievements', 'unlockedCharacters', 'avatarId', 'friends', 'hgteFragments', 'ttdFragments', 'selectedTitle', 'unlockedTitles', 'rankPoints', 'rankedWins', 'rankedTotal', 'lastRankedWinDate', 'selectedFrame', 'unlockedFrames', 'selectedEntranceEffect', 'unlockedEntranceEffects', 'createdAt', 'unlockedEffects', 'selectedEffect', 'checkInCount', 'lastCheckInDate', 'lastCheckIn', 'hasCheckedInToday', 'photoURL', 'photoUrl', 'displayName', 'role', 'updatedAt', 'lastLoginAt', 'providerId', 'tenantId', 'emailVerified', 'isAnonymous']) &&
              (!('userId' in data) || validStringLength(data, 'userId', 1, 100)) &&
              (!('uid' in data) || validStringLength(data, 'uid', 1, 100)) &&
              (!('name' in data) || data.name == null || validStringLength(data, 'name', 0, 200)) &&
@@ -140,6 +141,7 @@ service cloud.firestore {
              (!('avatarId' in data) || data.avatarId == null || validStringLength(data, 'avatarId', 0, 2000)) &&
              (!('friends' in data) || isValidList(data, 'friends', 1000)) &&
              (!('hgteFragments' in data) || isPositiveNumber(data, 'hgteFragments')) &&
+             (!('ttdFragments' in data) || isPositiveNumber(data, 'ttdFragments')) &&
              (!('selectedTitle' in data) || data.selectedTitle == null || validStringLength(data, 'selectedTitle', 1, 50)) &&
              (!('unlockedTitles' in data) || isValidList(data, 'unlockedTitles', 100)) &&
              (!('selectedFrame' in data) || data.selectedFrame == null || validStringLength(data, 'selectedFrame', 1, 50)) &&
@@ -209,6 +211,17 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
+    function isValidMail(data) {
+      return hasRequiredFields(['recipientId', 'title', 'content', 'sender', 'timestamp']) &&
+             hasOnlyAllowedFields(['recipientId', 'title', 'content', 'sender', 'timestamp', 'isRead', 'id', 'rewards']) &&
+             data.recipientId is string &&
+             data.title is string && data.title.size() > 0 &&
+             data.content is string && data.content.size() > 0 &&
+             data.sender is string &&
+             data.timestamp is timestamp &&
+             (!('rewards' in data) || data.rewards is list);
+    }
+
     function isAdmin() {
       return isAuthenticated() &&
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name == 'hdd') ||
@@ -264,6 +277,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidInvitation(request.resource.data) && request.resource.data.fromUid == request.auth.uid;
       allow update: if isAuthenticated() && isValidInvitation(request.resource.data) && (resource.data.toUid == request.auth.uid || resource.data.fromUid == request.auth.uid);
       allow delete: if isAuthenticated() && (resource.data.toUid == request.auth.uid || resource.data.fromUid == request.auth.uid);
+    }
+
+    match /mails/{mailId} {
+      allow read: if isAuthenticated() && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == 'all');
+      allow create: if isAdmin() && isValidMail(request.resource.data);
+      allow update: if (isAuthenticated() && resource.data.recipientId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Default deny
