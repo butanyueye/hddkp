@@ -1306,53 +1306,62 @@ function GameContent() {
     if (mail.isRead) return;
     try {
       await updateDoc(doc(db, 'mails', mail.id), { isRead: true });
-      if (mail.rewards && user) {
-        let newDiamonds = diamonds;
-        let newInventory = { ...inventory };
-        let newHgteFragments = hgteFragments;
-        let newTtdFragments = ttdFragments;
-        let newUnlocked = [...unlockedCharacters];
-        
-        mail.rewards.forEach((reward: any) => {
-          if (reward.type === 'diamonds') newDiamonds += reward.amount;
-          else if (['shield', 'magnet', 'doubleScore', 'dash'].includes(reward.type)) {
-            newInventory[reward.type as PowerUpType] = (newInventory[reward.type as PowerUpType] || 0) + reward.amount;
-          } else if (reward.type === 'hgteFragments') {
-            newHgteFragments += reward.amount;
-          } else if (reward.type === 'ttdFragments') {
-            newTtdFragments += reward.amount;
-          } else if (reward.type.startsWith('char_')) {
-            const charId = reward.type.replace('char_', '');
-            if (!newUnlocked.includes(charId)) {
-              newUnlocked.push(charId);
-            }
-          }
-        });
-        
-        setDiamonds(newDiamonds);
-        setInventory(newInventory);
-        setHgteFragments(newHgteFragments);
-        setTtdFragments(newTtdFragments);
-        setUnlockedCharacters(newUnlocked);
-        
-        await setDoc(doc(db, 'users', user.uid), {
-          diamonds: newDiamonds,
-          inventory: newInventory,
-          hgteFragments: newHgteFragments,
-          ttdFragments: newTtdFragments,
-          unlockedCharacters: newUnlocked
-        }, { merge: true });
-        
-        setToastMessage('已领取邮件奖励！');
-        setTimeout(() => setToastMessage(''), 3000);
-      }
     } catch (error) {
       console.error("Error marking mail as read:", error);
     }
   };
 
+  const claimMailRewards = async (mail: any) => {
+    if (mail.isClaimed || !mail.rewards || !user) return;
+    try {
+      let newDiamonds = diamonds;
+      let newInventory = { ...inventory };
+      let newHgteFragments = hgteFragments;
+      let newTtdFragments = ttdFragments;
+      let newUnlocked = [...unlockedCharacters];
+      
+      mail.rewards.forEach((reward: any) => {
+        if (reward.type === 'diamonds') newDiamonds += reward.amount;
+        else if (['shield', 'magnet', 'doubleScore', 'dash'].includes(reward.type)) {
+          newInventory[reward.type as PowerUpType] = (newInventory[reward.type as PowerUpType] || 0) + reward.amount;
+        } else if (reward.type === 'hgteFragments') {
+          newHgteFragments += reward.amount;
+        } else if (reward.type === 'ttdFragments') {
+          newTtdFragments += reward.amount;
+        } else if (reward.type.startsWith('char_')) {
+          const charId = reward.type.replace('char_', '');
+          if (!newUnlocked.includes(charId)) {
+            newUnlocked.push(charId);
+          }
+        }
+      });
+      
+      setDiamonds(newDiamonds);
+      setInventory(newInventory);
+      setHgteFragments(newHgteFragments);
+      setTtdFragments(newTtdFragments);
+      setUnlockedCharacters(newUnlocked);
+      
+      await setDoc(doc(db, 'users', user.uid), {
+        diamonds: newDiamonds,
+        inventory: newInventory,
+        hgteFragments: newHgteFragments,
+        ttdFragments: newTtdFragments,
+        unlockedCharacters: newUnlocked
+      }, { merge: true });
+      
+      await updateDoc(doc(db, 'mails', mail.id), { isClaimed: true, isRead: true });
+      
+      setToastMessage('已领取邮件奖励！');
+      setTimeout(() => setToastMessage(''), 3000);
+      
+      setSelectedMail({ ...mail, isClaimed: true, isRead: true });
+    } catch (error) {
+      console.error("Error claiming mail rewards:", error);
+    }
+  };
+
   const deleteMail = async (mailId: string) => {
-    if (!window.confirm('确定要删除这封邮件吗？')) return;
     try {
       await deleteDoc(doc(db, 'mails', mailId));
       setSelectedMail(null);
@@ -5232,10 +5241,28 @@ function GameContent() {
                           </span>
                         </div>
                         <p className="text-xs text-[#A65D2C] opacity-70 line-clamp-1">{mail.content}</p>
-                        <div className="mt-2 flex items-center gap-1">
+                        <div className="mt-2 flex items-center justify-between w-full">
                           <span className="text-[10px] bg-[#A65D2C]/10 text-[#A65D2C] px-2 py-0.5 rounded-full font-bold">
                             来自: {mail.sender}
                           </span>
+                          {mail.rewards && mail.rewards.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              {mail.rewards.slice(0, 3).map((reward: any, idx: number) => (
+                                <span key={idx} className="text-xs flex items-center justify-center">
+                                  {reward.type === 'diamonds' ? '💎' : 
+                                   reward.type === 'hgteFragments' ? '🧩' : 
+                                   reward.type === 'ttdFragments' ? '🧩' : 
+                                   reward.type === 'char_santa' ? <img src="santa.png" className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hjdj' ? <img src="hjdj.png" className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hz' ? <img src="hz.png" className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_hgte' ? <img src="hgte.png" className="w-4 h-4 object-contain" /> :
+                                   reward.type === 'char_ttd' ? <img src="ttd.png" className="w-4 h-4 object-contain" /> :
+                                   POWERUP_CONFIG[reward.type as PowerUpType]?.icon || '🎁'}
+                                </span>
+                              ))}
+                              {mail.rewards.length > 3 && <span className="text-[10px] text-[#A65D2C] font-bold">...</span>}
+                            </div>
+                          )}
                         </div>
                       </button>
                     ))
@@ -5279,22 +5306,26 @@ function GameContent() {
                           <div className="flex flex-wrap gap-3">
                             {selectedMail.rewards.map((reward: any, index: number) => (
                               <div key={index} className="flex items-center gap-2 bg-[#FFF0D4] px-3 py-2 rounded-xl border border-[#FAD689]">
-                                <span className="text-lg">
+                                <span className="text-lg flex items-center justify-center">
                                   {reward.type === 'diamonds' ? '💎' : 
                                    reward.type === 'hgteFragments' ? '🧩' : 
                                    reward.type === 'ttdFragments' ? '🧩' : 
-                                   reward.type.startsWith('char_') ? '👤' : 
+                                   reward.type === 'char_santa' ? <img src="santa.png" className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hjdj' ? <img src="hjdj.png" className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hz' ? <img src="hz.png" className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_hgte' ? <img src="hgte.png" className="w-6 h-6 object-contain" /> :
+                                   reward.type === 'char_ttd' ? <img src="ttd.png" className="w-6 h-6 object-contain" /> :
                                    POWERUP_CONFIG[reward.type as PowerUpType]?.icon || '🎁'}
                                 </span>
                                 <span className="font-bold text-[#A65D2C]">
                                   {reward.type === 'diamonds' ? '钻石' : 
                                    reward.type === 'hgteFragments' ? 'HGTE碎片' : 
                                    reward.type === 'ttdFragments' ? 'TTD碎片' : 
-                                   reward.type === 'char_santa' ? '角色: 圣诞老人' : 
-                                   reward.type === 'char_hjdj' ? '角色: 皇家大鸡' : 
-                                   reward.type === 'char_hz' ? '角色: 猴子' : 
-                                   reward.type === 'char_hgte' ? '角色: HGTE' : 
-                                   reward.type === 'char_ttd' ? '角色: TTD' : 
+                                   reward.type === 'char_santa' ? '角色: 圣诞老呼' : 
+                                   reward.type === 'char_hjdj' ? '角色: 海军大将' : 
+                                   reward.type === 'char_hz' ? '角色: 呼子' : 
+                                   reward.type === 'char_hgte' ? '角色: 呼刚帝尔' : 
+                                   reward.type === 'char_ttd' ? '角色: 跳跳帝' : 
                                    POWERUP_CONFIG[reward.type as PowerUpType]?.label || reward.type}
                                 </span>
                                 <span className="font-black text-[#e65100]">x{reward.amount}</span>
@@ -5304,15 +5335,31 @@ function GameContent() {
                         </div>
                       )}
 
-                      <div className="mt-8 pt-6 border-t border-[#FAD689]/30 flex justify-end">
+                      <div className="mt-8 pt-6 border-t border-[#FAD689]/30 flex justify-between items-center">
                         <button 
                           onClick={() => setSelectedMail(null)}
                           className="md:hidden bg-[#FAD689] text-[#A65D2C] font-bold px-6 py-2 rounded-xl"
                         >
                           返回列表
                         </button>
-                        <div className="hidden md:flex items-center gap-2 text-[#4CAF50] font-bold text-sm">
-                          <CheckCircle2 size={16} /> 已读
+                        <div className="flex-1"></div>
+                        <div className="flex items-center gap-4">
+                          {selectedMail.rewards && selectedMail.rewards.length > 0 && !selectedMail.isClaimed && (
+                            <button
+                              onClick={() => claimMailRewards(selectedMail)}
+                              className="bg-[#4CAF50] text-white font-bold px-6 py-2 rounded-xl hover:bg-[#45a049] transition-colors shadow-md"
+                            >
+                              一键领取
+                            </button>
+                          )}
+                          {selectedMail.rewards && selectedMail.rewards.length > 0 && selectedMail.isClaimed && (
+                            <div className="flex items-center gap-2 text-[#4CAF50] font-bold text-sm">
+                              <CheckCircle2 size={16} /> 已领取
+                            </div>
+                          )}
+                          <div className="hidden md:flex items-center gap-2 text-[#4CAF50] font-bold text-sm">
+                            <CheckCircle2 size={16} /> 已读
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -5378,11 +5425,11 @@ function GameContent() {
                                     type === 'dash' ? '冲刺' : 
                                     type === 'hgteFragments' ? 'HGTE碎片' : 
                                     type === 'ttdFragments' ? 'TTD碎片' : 
-                                    type === 'char_santa' ? '角色: 圣诞老人' : 
-                                    type === 'char_hjdj' ? '角色: 皇家大鸡' : 
-                                    type === 'char_hz' ? '角色: 猴子' : 
-                                    type === 'char_hgte' ? '角色: HGTE' : 
-                                    type === 'char_ttd' ? '角色: TTD' : type;
+                                    type === 'char_santa' ? '角色: 圣诞老呼' : 
+                                    type === 'char_hjdj' ? '角色: 海军大将' : 
+                                    type === 'char_hz' ? '角色: 呼子' : 
+                                    type === 'char_hgte' ? '角色: 呼刚帝尔' : 
+                                    type === 'char_ttd' ? '角色: 跳跳帝' : type;
                       return (
                       <button
                         key={type}
@@ -5414,11 +5461,11 @@ function GameContent() {
                                       reward.type === 'dash' ? '冲刺' : 
                                       reward.type === 'hgteFragments' ? 'HGTE碎片' : 
                                       reward.type === 'ttdFragments' ? 'TTD碎片' : 
-                                      reward.type === 'char_santa' ? '角色: 圣诞老人' : 
-                                      reward.type === 'char_hjdj' ? '角色: 皇家大鸡' : 
-                                      reward.type === 'char_hz' ? '角色: 猴子' : 
-                                      reward.type === 'char_hgte' ? '角色: HGTE' : 
-                                      reward.type === 'char_ttd' ? '角色: TTD' : reward.type;
+                                      reward.type === 'char_santa' ? '角色: 圣诞老呼' : 
+                                      reward.type === 'char_hjdj' ? '角色: 海军大将' : 
+                                      reward.type === 'char_hz' ? '角色: 呼子' : 
+                                      reward.type === 'char_hgte' ? '角色: 呼刚帝尔' : 
+                                      reward.type === 'char_ttd' ? '角色: 跳跳帝' : reward.type;
                         return (
                         <div key={reward.type} className="flex items-center gap-2 bg-white p-2 rounded-lg border-2 border-[#FAD689]">
                           <span className="font-bold text-[#A65D2C] w-32 truncate" title={label}>
