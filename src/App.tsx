@@ -2534,7 +2534,7 @@ function GameContent() {
       const maxCharges = playerRef.current.hzPassiveCharges > 0 ? 4 : 2;
       if (playerRef.current.hzSkillCharges >= maxCharges) {
         playerRef.current.hzSkillCharges -= maxCharges;
-        playerRef.current.hzSkillActive = 600; // 10 seconds duration for shield
+        playerRef.current.hzSkillActive = 1; // Infinite until hit
         playSound('score');
       }
     }
@@ -2868,7 +2868,6 @@ function GameContent() {
       if (player.doubleScore > 0) player.doubleScore -= dt;
       if (player.invincibility > 0) player.invincibility -= dt;
       if (player.hjdjSkillActive > 0) player.hjdjSkillActive -= dt;
-      if (player.hzSkillActive > 0) player.hzSkillActive -= dt;
       if (player.hgteSkillActive > 0) player.hgteSkillActive -= dt;
       if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
@@ -3408,8 +3407,14 @@ function GameContent() {
             if (player.x < p.x + p.width && player.x + player.width > p.x &&
                 player.y < p.y + p.height && player.y + player.height > p.y) {
               
-              if (player.shield > 0) {
-                player.shield = 0;
+              if (player.shield > 0 || player.hzSkillActive > 0) {
+                if (player.hzSkillActive > 0) {
+                  player.hzSkillActive = 0;
+                  player.hzSkillSprint = 300; // 5 seconds sprint
+                  playSound('score');
+                } else {
+                  player.shield = 0;
+                }
                 player.invincibility = 60;
                 playSound('hit');
                 createParticles(player.x, player.y, '#34d399', 20);
@@ -3429,6 +3434,7 @@ function GameContent() {
                     playSound('powerup');
                   } else if (selectedCharacter === 'hz' && player.hzPassiveCharges > 0) {
                     player.hzPassiveCharges--;
+                    if (player.hzSkillCharges > 2) player.hzSkillCharges = 2;
                     player.invincibility = 120;
                     boss.playerHits--; // Revert the last hit
                     playSound('powerup');
@@ -5966,7 +5972,7 @@ function GameContent() {
             <div className="flex flex-col gap-1">
               {playerRef.current?.shield > 0 && (
                 <div className="bg-emerald-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
-                  SHIELD {Math.ceil(playerRef.current.shield / 60)}s
+                  SHIELD ACTIVE
                 </div>
               )}
               {playerRef.current?.magnet > 0 && (
@@ -5986,7 +5992,7 @@ function GameContent() {
               )}
               {playerRef.current?.hzSkillActive > 0 && (
                 <div className="bg-blue-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white animate-pulse">
-                  FAT SHIELD {Math.ceil(playerRef.current.hzSkillActive / 60)}s
+                  FAT SHIELD ACTIVE
                 </div>
               )}
               {playerRef.current?.hzSkillSprint > 0 && (
@@ -6084,16 +6090,16 @@ function GameContent() {
           <div className="absolute bottom-4 right-4 z-10">
             <button
               onClick={activateHzSkill}
-              disabled={playerRef.current && playerRef.current.hzSkillCharges < 4}
+              disabled={playerRef.current && playerRef.current.hzSkillCharges < (playerRef.current.hzPassiveCharges > 0 ? 4 : 2)}
               className={`w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden ${
-                playerRef.current && playerRef.current.hzSkillCharges < 4
+                playerRef.current && playerRef.current.hzSkillCharges < (playerRef.current.hzPassiveCharges > 0 ? 4 : 2)
                   ? 'bg-black/50 border-white/20 opacity-60'
                   : 'bg-green-500 border-green-300 shadow-[0_6px_0_#2e7d32] active:translate-y-1 active:shadow-none'
               }`}
             >
               <img src={hzSkillImg} alt="Skill" className="w-full h-full object-cover" />
               <div className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
-                {playerRef.current ? playerRef.current.hzSkillCharges : 0}/4
+                {playerRef.current ? playerRef.current.hzSkillCharges : 0}/{playerRef.current?.hzPassiveCharges > 0 ? 4 : 2}
               </div>
             </button>
             <div className="text-center mt-1">
