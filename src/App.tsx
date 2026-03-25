@@ -5229,10 +5229,17 @@ function GameContent() {
             <div className="bg-[#FFFDF0] w-full max-w-3xl rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
               <div className="p-6 flex justify-between items-center bg-[#FFFDF0] border-b-2 border-[#FAD689]">
                 <div className="flex items-center gap-3">
+                  {selectedMail && (
+                    <button onClick={() => setSelectedMail(null)} className="mr-2 text-[#A65D2C] hover:text-[#8a4d24]">
+                      <ChevronLeft size={28} />
+                    </button>
+                  )}
                   <div className="bg-orange-400 p-2 rounded-xl">
                     <Mail className="text-white" size={24} />
                   </div>
-                  <h2 className="text-3xl font-black text-[#A65D2C] tracking-tight">我的邮件</h2>
+                  <h2 className="text-3xl font-black text-[#A65D2C] tracking-tight">
+                    {selectedMail ? selectedMail.title : '我的邮件'}
+                  </h2>
                 </div>
                 <button onClick={() => { setShowMailModal(false); setSelectedMail(null); }} className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md">
                   <X size={24} />
@@ -5241,7 +5248,7 @@ function GameContent() {
               
               <div className="flex-1 overflow-hidden flex">
                 {/* Mail List */}
-                <div className={`w-full md:w-2/5 shrink-0 flex flex-col overflow-y-auto p-4 gap-3 ${selectedMail ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full shrink-0 flex-col overflow-y-auto p-4 gap-3 ${selectedMail ? 'hidden' : 'flex'}`}>
                   {mails.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-[#A65D2C] opacity-50">
                       <Bell size={48} className="mb-4" />
@@ -5298,7 +5305,7 @@ function GameContent() {
 
                 {/* Mail Content */}
                 {selectedMail && (
-                  <div className="flex-1 flex flex-col bg-white md:border-l-2 border-[#FAD689] overflow-y-auto">
+                  <div className="flex-1 flex flex-col bg-white overflow-y-auto">
                     <div className="p-6 flex flex-col h-full">
                       <div className="flex justify-between items-start mb-6">
                         <h3 className="text-2xl font-black text-[#A65D2C] leading-tight">{selectedMail.title}</h3>
