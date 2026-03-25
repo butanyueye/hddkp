@@ -11,6 +11,7 @@ import { hgteBase64 as hgteImg } from './hgteBase64';
 import { hgteSkillBase64 as hgteSkillImg } from './hgteSkillBase64';
 import { hxdBase64 as hxdImg } from './hxdBase64';
 import { ndBase64 as ndImg } from './ndBase64';
+import { ttdBase64 as ttdImg } from './ttdBase64';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -19,7 +20,7 @@ const getCharacterImage = (charId: string | undefined) => {
     case 'hjdj': return hjdjImg;
     case 'hz': return hzImg;
     case 'hgte': return hgteImg;
-    case 'ttd': return 'ttd.png';
+    case 'ttd': return ttdImg;
     case 'hdd':
     default: return hddImg;
   }
@@ -5117,7 +5118,7 @@ function GameContent() {
                 {gachaResult.ttdFragments > 0 && (
                   <div className="flex items-center gap-2 text-xl font-bold text-[#5d4037]">
                     获得跳跳帝碎片：
-                    <img src="ttd.png" alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <img src={ttdImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
                     <span className="text-blue-600 font-black text-2xl">x{gachaResult.ttdFragments}</span>
                   </div>
                 )}
@@ -5160,7 +5161,7 @@ function GameContent() {
                 </div>
                 <div className="bg-[#ffcc80]/30 py-3 px-4 rounded-xl border-2 border-[#ffb300]/30 flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <img src="ttd.png" alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
+                    <img src={ttdImg} alt="碎片" className="w-8 h-8 object-contain drop-shadow-md" />
                     <span className="text-[#d84315] font-bold">跳跳帝碎片</span>
                   </div>
                   <span className="text-blue-600 font-black text-xl">{ttdFragments}/78</span>
@@ -6512,7 +6513,7 @@ function GameContent() {
                     {
                       id: 'ttd',
                       name: '跳跳帝',
-                      img: 'ttd.png',
+                      img: ttdImg,
                       skill: '技能：三段跳',
                       desc: '拥有三段跳能力。按照能量条提示进行“跳跃”或“蹲下”操作可触发连击并提升得分倍率。连续达成5次连击将触发“超高一跳”，落地时摧毁屏幕内所有障碍物并获得高额得分。每次超高一跳会永久增加得分倍率，上限提升至3.5倍。'
                     }
@@ -6554,7 +6555,7 @@ function GameContent() {
                             <div className="bg-black/70 text-white px-3 py-1 rounded-full text-[10px] font-bold mb-2 flex items-center gap-1">
                               <Lock size={10} /> {isFragmentChar ? (
                                 <span className="flex items-center gap-1">
-                                  <img src={char.id === 'ttd' ? 'ttd.png' : hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> 
+                                  <img src={char.id === 'ttd' ? ttdImg : hgteImg} alt="碎片" className="w-3 h-3 object-contain" /> 
                                   {(char.id === 'ttd' ? ttdFragments : hgteFragments)}/78
                                 </span>
                               ) : `需达到 ${reqScore} 分`}
@@ -7213,7 +7214,7 @@ function GameContent() {
                       { name: '磁铁', icon: POWERUP_CONFIG['magnet'].icon },
                       { name: '双倍', icon: POWERUP_CONFIG['doubleScore'].icon },
                       { name: '冲刺', icon: POWERUP_CONFIG['dash'].icon },
-                      { name: '碎片', img: 'ttd.png' }
+                      { name: '碎片', img: ttdImg }
                     ].map((item, i) => (
                       <div key={i} className="bg-gray-100 p-1 rounded-lg font-bold text-[#795548] flex flex-col items-center justify-center">
                         {item.img ? (
