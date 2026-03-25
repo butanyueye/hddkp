@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase, ChevronRight, ArrowUp, ArrowDown, Mail, Bell, Trash2, CheckCircle2 } from 'lucide-react';
+import { Settings, X, Megaphone, Package, Check, Pause, Volume2, VolumeX, LogIn, LogOut, Trophy, Gift, Lock, Unlock, Users, Play, Copy, Star, Briefcase, ChevronRight, ChevronLeft, ArrowUp, ArrowDown, Mail, Bell, Trash2, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hddBase64 as hddImg } from './hddBase64';
 import { sdlhBase64 as santaImg } from './sdlhBase64';
