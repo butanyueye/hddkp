@@ -908,6 +908,7 @@ function GameContent() {
     nextTriggerFrame: 3600
   });
   const blackHoleRef = useRef<BlackHole | null>(null);
+  const blackHoleCooldownRef = useRef(0);
   const bonusLevelRef = useRef({
     active: false,
     timer: 0,
@@ -2271,6 +2272,7 @@ function GameContent() {
     diamondsRef.current = [];
     coinsRef.current = [];
     blackHoleRef.current = null;
+    blackHoleCooldownRef.current = 0;
     bonusLevelRef.current = { active: false, timer: 0, duration: 600 };
     bossRef.current = {
       active: false,
@@ -2583,9 +2585,9 @@ function GameContent() {
   const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
     setDifficulty(newDifficulty);
     const timeFactor = Math.floor(frameCountRef.current / 1000);
-    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 4;
-    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.15);
-    spawnRateRef.current = Math.max(60, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 1.5);
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 2.5;
+    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.1);
+    spawnRateRef.current = Math.max(75, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 1.0);
   }, []);
 
   const resumeGame = useCallback(() => {
@@ -2629,6 +2631,7 @@ function GameContent() {
       // Clear obstacles near player
       obstaclesRef.current = obstaclesRef.current.filter(obs => obs.x > playerRef.current.x + 400);
       bossRef.current.projectiles = bossRef.current.projectiles.filter(p => p.x > playerRef.current.x + 400);
+      bossRef.current.playerHits = 0;
       blackHoleRef.current = null;
       bonusLevelRef.current.active = false;
       coinsRef.current = [];
@@ -2717,7 +2720,7 @@ function GameContent() {
     if (selectedCharacter === 'ttd' && player.ttdEnergyBar.active) {
       if (player.ttdEnergyBar.type === 'jump') {
         player.ttdCombo++;
-        player.ttdMultiplier = Math.min(5, player.ttdMultiplier + 0.2);
+        player.ttdMultiplier = Math.min(3.5, player.ttdMultiplier + 0.2);
         setScore(s => s + Math.floor(50 * player.ttdMultiplier));
         createParticles(player.x, player.y, '#ffeb3b', 20);
         if (player.ttdCombo >= 5) {
@@ -2760,7 +2763,7 @@ function GameContent() {
     if (selectedCharacter === 'ttd' && player.ttdEnergyBar.active) {
       if (player.ttdEnergyBar.type === 'crouch') {
         player.ttdCombo++;
-        player.ttdMultiplier = Math.min(5, player.ttdMultiplier + 0.2);
+        player.ttdMultiplier = Math.min(3.5, player.ttdMultiplier + 0.2);
         setScore(s => s + Math.floor(50 * player.ttdMultiplier));
         createParticles(player.x, player.y, '#ffeb3b', 20);
         if (player.ttdCombo >= 5) {
@@ -2864,10 +2867,11 @@ function GameContent() {
       if (player.hgteSkillActive > 0) player.hgteSkillActive -= dt;
       if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
+      if (blackHoleCooldownRef.current > 0) blackHoleCooldownRef.current -= dt;
       
       if (selectedCharacter === 'ttd') {
         if (!player.ttdEnergyBar.active) {
-          if (Math.random() < 0.01 * dt) {
+          if (Math.random() < 0.005 * dt) {
             player.ttdEnergyBar.active = true;
             player.ttdEnergyBar.type = Math.random() < 0.5 ? 'jump' : 'crouch';
             player.ttdEnergyBar.maxTimer = 90;
@@ -3081,6 +3085,10 @@ function GameContent() {
         }
       }
 
+      if (player.ttdSuperJump) {
+        createParticles(player.x + player.width / 2, player.y + player.height, '#ffeb3b', 2);
+      }
+
       if (player.y + player.height >= groundY) {
         if (player.vy > 10) {
           createParticles(player.x + player.width / 2, groundY, '#4ade80', 15);
@@ -3092,6 +3100,24 @@ function GameContent() {
         
         if (player.ttdSuperJump) {
           player.ttdSuperJump = false;
+          
+          const canvas = canvasRef.current;
+          if (canvas) {
+            canvas.style.transform = 'translate(10px, 10px)';
+            setTimeout(() => {
+              if (canvas) canvas.style.transform = 'translate(-10px, -10px)';
+              setTimeout(() => {
+                if (canvas) canvas.style.transform = 'translate(10px, -10px)';
+                setTimeout(() => {
+                  if (canvas) canvas.style.transform = 'translate(0, 0)';
+                }, 50);
+              }, 50);
+            }, 50);
+          }
+
+          createParticles(player.x + player.width / 2, groundY, '#ffeb3b', 100);
+          createParticles(player.x + player.width / 2, groundY, '#f97316', 50);
+          
           obstaclesRef.current.forEach(obs => {
             createParticles(obs.x + obs.width / 2, obs.y + obs.height / 2, '#ff0000', 20);
           });
@@ -3173,11 +3199,11 @@ function GameContent() {
       }
 
       if (Math.floor(frameCountRef.current / 1000) > Math.floor(prevFrameCount / 1000)) {
-        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 4;
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 2.5;
         if (speedRef.current < maxSpeed) {
-          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.15);
+          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.1);
         }
-        spawnRateRef.current = Math.max(60, spawnRateRef.current - 1.5);
+        spawnRateRef.current = Math.max(75, spawnRateRef.current - 1.0);
       }
 
       // Boss Trigger
@@ -3277,7 +3303,7 @@ function GameContent() {
       }
 
       // Spawn Black Hole
-      if (!bossRef.current.active && !bonusLevelRef.current.active && !blackHoleRef.current?.active) {
+      if (!bossRef.current.active && !bonusLevelRef.current.active && !blackHoleRef.current?.active && blackHoleCooldownRef.current <= 0) {
         if (Math.random() < 0.001) { // Random chance to spawn
           blackHoleRef.current = {
             x: canvas.width + 500,
@@ -3287,6 +3313,7 @@ function GameContent() {
             active: true,
             rotation: 0
           };
+          blackHoleCooldownRef.current = 1800; // 30 seconds cooldown at 60fps
         }
       }
 
@@ -5199,7 +5226,7 @@ function GameContent() {
         {/* Mailbox Modal */}
         {showMailModal && (
           <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-[#FFFDF0] w-full max-w-lg rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
+            <div className="bg-[#FFFDF0] w-full max-w-3xl rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border-4 border-[#FAD689]">
               <div className="p-6 flex justify-between items-center bg-[#FFFDF0] border-b-2 border-[#FAD689]">
                 <div className="flex items-center gap-3">
                   <div className="bg-orange-400 p-2 rounded-xl">
@@ -5214,7 +5241,7 @@ function GameContent() {
               
               <div className="flex-1 overflow-hidden flex">
                 {/* Mail List */}
-                <div className={`flex-1 flex flex-col overflow-y-auto p-4 gap-3 ${selectedMail ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full md:w-2/5 shrink-0 flex flex-col overflow-y-auto p-4 gap-3 ${selectedMail ? 'hidden md:flex' : 'flex'}`}>
                   {mails.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-[#A65D2C] opacity-50">
                       <Bell size={48} className="mb-4" />
@@ -5236,7 +5263,7 @@ function GameContent() {
                         )}
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-black text-[#A65D2C] line-clamp-1 pr-4">{mail.title}</span>
-                          <span className="text-[10px] text-[#A65D2C] opacity-60 whitespace-nowrap">
+                          <span className="text-[10px] text-[#A65D2C] opacity-60 whitespace-nowrap shrink-0">
                             {mail.timestamp?.toDate ? mail.timestamp.toDate().toLocaleDateString() : '刚刚'}
                           </span>
                         </div>
@@ -5271,7 +5298,7 @@ function GameContent() {
 
                 {/* Mail Content */}
                 {selectedMail && (
-                  <div className="flex-[1.5] flex flex-col bg-white border-l-2 border-[#FAD689] overflow-y-auto">
+                  <div className="flex-1 flex flex-col bg-white md:border-l-2 border-[#FAD689] overflow-y-auto">
                     <div className="p-6 flex flex-col h-full">
                       <div className="flex justify-between items-start mb-6">
                         <h3 className="text-2xl font-black text-[#A65D2C] leading-tight">{selectedMail.title}</h3>
@@ -5305,7 +5332,7 @@ function GameContent() {
                           <h4 className="font-bold text-[#A65D2C] mb-3">附件奖励</h4>
                           <div className="flex flex-wrap gap-3">
                             {selectedMail.rewards.map((reward: any, index: number) => (
-                              <div key={index} className="flex items-center gap-2 bg-[#FFF0D4] px-3 py-2 rounded-xl border border-[#FAD689]">
+                              <div key={index} className="flex items-center gap-2 bg-[#FFF0D4] px-3 py-2 rounded-xl border border-[#FAD689] whitespace-nowrap">
                                 <span className="text-lg flex items-center justify-center">
                                   {reward.type === 'diamonds' ? '💎' : 
                                    reward.type === 'hgteFragments' ? '🧩' : 
