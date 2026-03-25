@@ -2513,6 +2513,7 @@ function GameContent() {
       playerRef.current.hgteSkillCharges -= 1;
       playerRef.current.hgteSkillActive = 30; // 0.5s duration for swing
       playSound('hit');
+      setScore(s => s + 50);
       // Screen shake effect
       const canvas = canvasRef.current;
       if (canvas) {
@@ -2528,10 +2529,13 @@ function GameContent() {
   }, [selectedCharacter]);
 
   const activateHzSkill = useCallback(() => {
-    if (selectedCharacter === 'hz' && playerRef.current && playerRef.current.hzSkillCharges >= 4) {
-      playerRef.current.hzSkillCharges -= 4;
-      playerRef.current.hzSkillActive = 600; // 10 seconds duration for shield
-      playSound('score');
+    if (selectedCharacter === 'hz' && playerRef.current) {
+      const maxCharges = playerRef.current.hzPassiveCharges > 0 ? 4 : 2;
+      if (playerRef.current.hzSkillCharges >= maxCharges) {
+        playerRef.current.hzSkillCharges -= maxCharges;
+        playerRef.current.hzSkillActive = 600; // 10 seconds duration for shield
+        playSound('score');
+      }
     }
   }, [selectedCharacter]);
 
@@ -2585,9 +2589,9 @@ function GameContent() {
   const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
     setDifficulty(newDifficulty);
     const timeFactor = Math.floor(frameCountRef.current / 1000);
-    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 2.5;
-    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.1);
-    spawnRateRef.current = Math.max(75, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 1.0);
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 1.5;
+    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.05);
+    spawnRateRef.current = Math.max(90, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 0.5);
   }, []);
 
   const resumeGame = useCallback(() => {
@@ -2871,7 +2875,7 @@ function GameContent() {
       
       if (selectedCharacter === 'ttd') {
         if (!player.ttdEnergyBar.active) {
-          if (Math.random() < 0.005 * dt) {
+          if (Math.random() < 0.0025 * dt) {
             player.ttdEnergyBar.active = true;
             player.ttdEnergyBar.type = Math.random() < 0.5 ? 'jump' : 'crouch';
             player.ttdEnergyBar.maxTimer = 90;
@@ -2941,7 +2945,8 @@ function GameContent() {
       setScore(s => {
         const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
         const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
-        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult;
+        const hzMult = (selectedCharacter === 'hz' && player.hzSkillActive > 0) ? 2 : 1;
+        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult;
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
         
@@ -3199,11 +3204,11 @@ function GameContent() {
       }
 
       if (Math.floor(frameCountRef.current / 1000) > Math.floor(prevFrameCount / 1000)) {
-        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 2.5;
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 1.5;
         if (speedRef.current < maxSpeed) {
-          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.1);
+          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.05);
         }
-        spawnRateRef.current = Math.max(75, spawnRateRef.current - 1.0);
+        spawnRateRef.current = Math.max(90, spawnRateRef.current - 0.5);
       }
 
       // Boss Trigger
@@ -3560,8 +3565,11 @@ function GameContent() {
           pu.collected = true;
           
           // Huzi skill charge
-          if (selectedCharacter === 'hz' && player.hzSkillCharges < 4) {
-            player.hzSkillCharges += 1;
+          if (selectedCharacter === 'hz') {
+            const maxCharges = player.hzPassiveCharges > 0 ? 4 : 2;
+            if (player.hzSkillCharges < maxCharges) {
+              player.hzSkillCharges += 1;
+            }
           }
           
           // Hjdj skill charge and score
@@ -3751,6 +3759,7 @@ function GameContent() {
         if (player.hgteSkillActive > 0 && obs.x > player.x && obs.x < player.x + 200) {
           createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#f97316', 30); // Orange-red fire particles
           obstacles.splice(i, 1);
+          setScore(s => s + 100);
           continue;
         }
 
@@ -3809,6 +3818,7 @@ function GameContent() {
             continue;
           } else if (selectedCharacter === 'hz' && player.hzPassiveCharges > 0) {
             player.hzPassiveCharges -= 1;
+            if (player.hzSkillCharges > 2) player.hzSkillCharges = 2;
             player.invincibility = 120; // 2 seconds invincibility after passive trigger
             createParticles(player.x + player.width/2, player.y + player.height/2, '#60a5fa', 30);
             obstacles.splice(i, 1);
@@ -3846,7 +3856,8 @@ function GameContent() {
           setScore(s => {
             const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
             const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
-            const newScore = s + Math.floor((player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult);
+            const hzMult = (selectedCharacter === 'hz' && player.hzSkillActive > 0) ? 2 : 1;
+            const newScore = s + Math.floor((player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult);
             checkAchievements(newScore);
             
             if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -6380,6 +6391,24 @@ function GameContent() {
                   <p className="font-medium">为了提升游戏的操作深度并丰富收集体验，我们于今日完成了一次重磅更新！本次更新不仅增加了全新的操作维度，还带来了强力新角色及安卓原生支持。</p>
                   
                   <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">✨ 角色平衡性调整</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">呼刚帝尔：</span>新增挥棒获得50分，如果此次挥棒成功摧毁障碍则获得100分。</li>
+                      <li><span className="font-bold text-[#d84315]">呼子：</span>技能获得的脂肪护盾存在期间，双倍得分。触发被动弹性肚腩抵消伤害之后，充能4次减少到充能2次就能开启技能。</li>
+                      <li><span className="font-bold text-[#d84315]">跳跳帝 (TTD)：</span>得分加成上限由之前的 400%（5.0x） 降低到了 250%（3.5x）。稍微降低了跳跳帝能量条提示“蹲”或“跳”的出现频率（触发概率降低了一半），让操作节奏更加平缓。</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
+                    <h4 className="font-black text-[#e65100] flex items-center gap-2">🛠️ 游戏体验优化与修复</h4>
+                    <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
+                      <li><span className="font-bold text-[#d84315]">黑洞出现频率限制：</span>增加了黑洞冷却机制，现在黑洞出现后，至少需要等待 30秒（1800帧）才会再次出现。</li>
+                      <li><span className="font-bold text-[#d84315]">降低后期游戏难度：</span>减缓了游戏随时间加速的幅度。降低了后期的最大速度上限。提高了后期障碍物生成的最小间隔，避免后期障碍物过于密集。</li>
+                      <li><span className="font-bold text-[#d84315]">修复呼刚帝尔复活BUG：</span>修复了呼刚帝尔（Hgte）在Boss战中死亡后，使用钻石复活会因为Boss攻击次数未重置而导致瞬间再次死亡的BUG。现在复活时会正确清空Boss对玩家的命中次数。</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-white/50 p-4 rounded-xl border-2 border-[#ffb300]/30 space-y-2">
                     <h4 className="font-black text-[#e65100] flex items-center gap-2">🎮 新增操作：下蹲功能 (Crouch)</h4>
                     <ul className="list-disc pl-5 space-y-1 font-medium text-sm">
                       <li><span className="font-bold text-[#d84315]">新增下蹲键：</span>我们在游戏界面右下方新增了下蹲按钮。</li>
@@ -6471,14 +6500,14 @@ function GameContent() {
                       name: '呼子', 
                       img: hzImg, 
                       skill: '技能：脂肪护盾', 
-                      desc: '捡道具获得充能，充能4次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限1次。' 
+                      desc: '捡道具获得充能，充能4次后可使用技能，主动开启后，用厚厚的脂肪层形成护盾，护盾存在期间双倍得分，护盾破碎后，还会获得冲刺五秒。被动：弹性肚腩，被障碍物撞击时，肚腩会像弹簧一样弹起，抵消伤害，全局仅限1次。触发被动后，技能充能上限减少至2次。' 
                     },
                     {
                       id: 'hgte',
                       name: '呼刚帝尔',
                       img: hgteImg,
                       skill: '技能：挥棒',
-                      desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物，扔出“呼小帝”前无法二段跳。初始3次充能，捡起2次掉落物可充能1次，最多充能6次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。扔出后解锁二段跳。'
+                      desc: '点击攻击按钮挥动棒球棒摧毁前方障碍物，挥棒获得50分，成功摧毁障碍物获得100分。扔出“呼小帝”前无法二段跳。初始3次充能，捡起2次掉落物可充能1次，最多充能6次。被动：首次受到致命伤害时不会死亡，扔出无敌的“呼小帝”帮忙收集掉落物，全局仅限1次。扔出后解锁二段跳。'
                     },
                     {
                       id: 'ttd',
