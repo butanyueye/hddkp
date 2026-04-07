@@ -12,6 +12,7 @@ import { hgteSkillBase64 as hgteSkillImg } from './hgteSkillBase64';
 import { hxdBase64 as hxdImg } from './hxdBase64';
 import { ndBase64 as ndImg } from './ndBase64';
 import { ttdBase64 as ttdImg } from './ttdBase64';
+import { xdBase64 as xdImg } from './xdBase64';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -2751,10 +2752,12 @@ function GameContent() {
     if (selectedCharacter === 'hgte') maxJumpsAllowed = player.hgtePassiveUsed ? 2 : 1;
     if (selectedCharacter === 'ttd') maxJumpsAllowed = 3;
 
-    if (player.jumps < maxJumpsAllowed || player.ttdSuperJump) {
+    if (player.jumps < maxJumpsAllowed) {
       playSound('jump');
       const currentBiome = BIOMES[envRef.current.biomeIndex];
-      player.vy = (player.ttdSuperJump ? JUMP_STRENGTH * 1.5 : JUMP_STRENGTH) * currentBiome.jumpMod;
+      // Only the first jump from the ground gets the super jump multiplier
+      const isSuperJump = player.ttdSuperJump && player.jumps === 0;
+      player.vy = (isSuperJump ? JUMP_STRENGTH * 1.5 : JUMP_STRENGTH) * currentBiome.jumpMod;
       player.jumps++;
       player.isJumping = true;
       createParticles(player.x + player.width / 2, player.y + player.height, '#fff', 10);
@@ -6047,7 +6050,7 @@ function GameContent() {
               }}
               className="w-16 h-16 rounded-full border-4 flex items-center justify-center transition-all relative overflow-hidden bg-blue-500 border-blue-300 shadow-[0_6px_0_#1d4ed8] active:translate-y-1 active:shadow-none"
             >
-              <img src="xd.png" alt="Crouch" className="w-full h-full object-cover" />
+              <img src={xdImg} alt="Crouch" className="w-full h-full object-cover" />
             </button>
             <div className="text-center mt-1">
               <span className="text-white font-black text-xs bg-black/50 px-2 py-0.5 rounded-full">下蹲</span>
