@@ -83,17 +83,19 @@ interface Biome {
 
 const BIOMES: Biome[] = [
   { id: 'FOREST', name: '🌲 绿野森林', bgTop: '#87CEEB', bgBottom: '#e0f6ff', ground: '#4caf50', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1, scoreThreshold: 0 },
-  { id: 'DESERT', name: '🌵 狂野沙漠', bgTop: '#FFB75E', bgBottom: '#ED8F03', ground: '#e6c229', gravityMod: 1, jumpMod: 1, speedMod: 1.05, slideMod: 1, scoreThreshold: 1000 },
-  { id: 'ICE', name: '❄️ 极寒冰原', bgTop: '#a1c4fd', bgBottom: '#c2e9fb', ground: '#e0f7fa', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1.5, scoreThreshold: 2000 },
-  { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.1, jumpMod: 1.1, speedMod: 1.1, slideMod: 1, scoreThreshold: 3500 },
-  { id: 'SPACE', name: '🌌 浩瀚星空', bgTop: '#000000', bgBottom: '#1a0b2e', ground: '#424242', gravityMod: 0.6, jumpMod: 1.2, speedMod: 0.9, slideMod: 1, scoreThreshold: 5000 },
-  { id: 'VOLCANO', name: '🌋 熔岩火山', bgTop: '#430000', bgBottom: '#8b0000', ground: '#d84315', gravityMod: 1.2, jumpMod: 0.9, speedMod: 1.2, slideMod: 1, scoreThreshold: 7000 },
-  { id: 'UNDERWATER', name: '🌊 深海遗迹', bgTop: '#001f3f', bgBottom: '#0074D9', ground: '#001f3f', gravityMod: 0.8, jumpMod: 1.0, speedMod: 0.8, slideMod: 1.2, scoreThreshold: 9000 },
-  { id: 'VOID', name: '🌀 虚空裂隙', bgTop: '#1a1a1a', bgBottom: '#4a148c', ground: '#000000', gravityMod: 1.0, jumpMod: 1.0, speedMod: 1.5, slideMod: 1.0, scoreThreshold: 12000 },
-  { id: 'JUNGLE', name: '🌿 原始丛林', bgTop: '#1b5e20', bgBottom: '#388e3c', ground: '#2e7d32', gravityMod: 1.0, jumpMod: 1.1, speedMod: 1.0, slideMod: 1.1, scoreThreshold: 15000 },
-  { id: 'DESERT_STORM', name: '🌪️ 沙尘暴', bgTop: '#bf360c', bgBottom: '#d84315', ground: '#e64a19', gravityMod: 1.1, jumpMod: 1.0, speedMod: 1.3, slideMod: 0.9, scoreThreshold: 18000 },
-  { id: 'NEON_DREAM', name: '✨ 霓虹梦境', bgTop: '#c51162', bgBottom: '#6200ea', ground: '#00b8d4', gravityMod: 0.9, jumpMod: 1.3, speedMod: 1.4, slideMod: 1.2, scoreThreshold: 22000 },
+  { id: 'DESERT', name: '🌵 狂野沙漠', bgTop: '#FFB75E', bgBottom: '#ED8F03', ground: '#e6c229', gravityMod: 1, jumpMod: 1, speedMod: 1.05, slideMod: 1, scoreThreshold: 2000 },
+  { id: 'ICE', name: '❄️ 极寒冰原', bgTop: '#a1c4fd', bgBottom: '#c2e9fb', ground: '#e0f7fa', gravityMod: 1, jumpMod: 1, speedMod: 1, slideMod: 1.5, scoreThreshold: 4500 },
+  { id: 'CYBER', name: '🌃 赛博城市', bgTop: '#0f2027', bgBottom: '#203a43', ground: '#8e24aa', gravityMod: 1.1, jumpMod: 1.1, speedMod: 1.1, slideMod: 1, scoreThreshold: 7500 },
+  { id: 'SPACE', name: '🌌 浩瀚星空', bgTop: '#000000', bgBottom: '#1a0b2e', ground: '#424242', gravityMod: 0.6, jumpMod: 1.2, speedMod: 0.9, slideMod: 1, scoreThreshold: 11000 },
+  { id: 'VOLCANO', name: '🌋 熔岩火山', bgTop: '#430000', bgBottom: '#8b0000', ground: '#d84315', gravityMod: 1.2, jumpMod: 0.9, speedMod: 1.2, slideMod: 1, scoreThreshold: 15000 },
+  { id: 'UNDERWATER', name: '🌊 深海遗迹', bgTop: '#001f3f', bgBottom: '#0074D9', ground: '#001f3f', gravityMod: 0.8, jumpMod: 1.0, speedMod: 0.8, slideMod: 1.2, scoreThreshold: 19500 },
+  { id: 'VOID', name: '🌀 虚空裂隙', bgTop: '#1a1a1a', bgBottom: '#4a148c', ground: '#000000', gravityMod: 1.0, jumpMod: 1.0, speedMod: 1.5, slideMod: 1.0, scoreThreshold: 24500 },
+  { id: 'JUNGLE', name: '🌿 原始丛林', bgTop: '#1b5e20', bgBottom: '#388e3c', ground: '#2e7d32', gravityMod: 1.0, jumpMod: 1.1, speedMod: 1.0, slideMod: 1.1, scoreThreshold: 30000 },
+  { id: 'DESERT_STORM', name: '🌪️ 沙尘暴', bgTop: '#bf360c', bgBottom: '#d84315', ground: '#e64a19', gravityMod: 1.1, jumpMod: 1.0, speedMod: 1.3, slideMod: 0.9, scoreThreshold: 36000 },
+  { id: 'NEON_DREAM', name: '✨ 霓虹梦境', bgTop: '#c51162', bgBottom: '#6200ea', ground: '#00b8d4', gravityMod: 0.9, jumpMod: 1.3, speedMod: 1.4, slideMod: 1.2, scoreThreshold: 42500 },
 ];
+
+const CYCLE_SCORE = 50000;
 
 const TITLES = {
   // 新手/入门级 (Common)
@@ -2293,6 +2295,17 @@ function GameContent() {
       nextTriggerFrame: 3600
     };
     particlesRef.current = [];
+    
+    // Initialize background elements for the first biome
+    const canvas = canvasRef.current;
+    const groundY = canvas ? canvas.height - 100 : 500;
+    backgroundElementsRef.current = Array.from({length: 20}, () => ({
+      x: Math.random() * (canvas ? canvas.width : 800),
+      y: groundY - 50 - Math.random() * 50,
+      type: getRandomTypeForBiome(BIOMES[0].id),
+      layer: Math.floor(Math.random() * 3)
+    }));
+    
     frameCountRef.current = 0;
     speedRef.current = DIFFICULTY_SETTINGS[difficulty].speed;
     spawnRateRef.current = DIFFICULTY_SETTINGS[difficulty].spawnRate;
@@ -2591,9 +2604,11 @@ function GameContent() {
   const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
     setDifficulty(newDifficulty);
     const timeFactor = Math.floor(frameCountRef.current / 1000);
-    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 1.5;
+    const cycleCount = Math.floor(scoreAccumulatorRef.current / CYCLE_SCORE);
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 1.5 + (cycleCount * 0.5);
     speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.05);
-    spawnRateRef.current = Math.max(90, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 0.5);
+    const minSpawnRate = Math.max(60, 90 - (cycleCount * 10));
+    spawnRateRef.current = Math.max(minSpawnRate, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 0.5);
   }, []);
 
   const resumeGame = useCallback(() => {
@@ -2981,18 +2996,23 @@ function GameContent() {
       });
 
       // Biome Logic
+      const normalizedScore = score % CYCLE_SCORE;
       let currentBiomeIndex = 0;
       for (let i = BIOMES.length - 1; i >= 0; i--) {
-        if (score >= BIOMES[i].scoreThreshold) {
+        if (normalizedScore >= BIOMES[i].scoreThreshold) {
           currentBiomeIndex = i;
           break;
         }
       }
       
       if (envRef.current.biomeIndex !== currentBiomeIndex) {
+        const isFirstLoad = score === 0;
         envRef.current.biomeIndex = currentBiomeIndex;
         envRef.current.biomeTransition = 1.0;
-        envRef.current.announcement = BIOMES[currentBiomeIndex].name;
+        
+        const cycleCount = Math.floor(score / CYCLE_SCORE);
+        const cycleText = cycleCount > 0 ? ` (周目 ${cycleCount + 1})` : '';
+        envRef.current.announcement = BIOMES[currentBiomeIndex].name + cycleText;
         envRef.current.announcementTimer = 180; // 3 seconds at 60fps
         
         // Regenerate background elements
@@ -3004,8 +3024,8 @@ function GameContent() {
           layer: Math.floor(Math.random() * 3)
         }));
         
-        // Grant 5 seconds of invincibility on map change (300 frames at 60fps)
-        if (currentBiomeIndex > 0) {
+        // Grant 5 seconds of invincibility on map change (except initial load)
+        if (!isFirstLoad) {
           player.invincibility = 300;
           createParticles(player.x + player.width / 2, player.y + player.height / 2, '#60a5fa', 50);
         }
@@ -3207,11 +3227,13 @@ function GameContent() {
       }
 
       if (Math.floor(frameCountRef.current / 1000) > Math.floor(prevFrameCount / 1000)) {
-        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 1.5;
+        const cycleCount = Math.floor(score / CYCLE_SCORE);
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 1.5 + (cycleCount * 0.5);
         if (speedRef.current < maxSpeed) {
           speedRef.current = Math.min(maxSpeed, speedRef.current + 0.05);
         }
-        spawnRateRef.current = Math.max(90, spawnRateRef.current - 0.5);
+        const minSpawnRate = Math.max(60, 90 - (cycleCount * 10));
+        spawnRateRef.current = Math.max(minSpawnRate, spawnRateRef.current - 0.5);
       }
 
       // Boss Trigger
@@ -3905,8 +3927,9 @@ function GameContent() {
       let groundColor = currentBiome.ground;
 
       // Blend colors if transitioning
-      if (envRef.current.biomeTransition > 0 && envRef.current.biomeIndex > 0) {
-        const prevBiome = BIOMES[envRef.current.biomeIndex - 1];
+      if (envRef.current.biomeTransition > 0) {
+        const prevBiomeIndex = envRef.current.biomeIndex === 0 ? BIOMES.length - 1 : envRef.current.biomeIndex - 1;
+        const prevBiome = BIOMES[prevBiomeIndex];
         const t = envRef.current.biomeTransition;
         
         // Simple hex to rgb interpolation helper
