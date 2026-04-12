@@ -13,7 +13,7 @@ import { hxdBase64 as hxdImg } from './hxdBase64';
 import { ndBase64 as ndImg } from './ndBase64';
 import { ttdBase64 as ttdImg } from './ttdBase64';
 import { xdBase64 as xdImg } from './xdBase64';
-import yxddImg from './yxdd.png';
+import { yxddBase64 as yxddImg } from './yxddBase64';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
