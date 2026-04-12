@@ -13,6 +13,7 @@ import { hxdBase64 as hxdImg } from './hxdBase64';
 import { ndBase64 as ndImg } from './ndBase64';
 import { ttdBase64 as ttdImg } from './ttdBase64';
 import { xdBase64 as xdImg } from './xdBase64';
+import yxddImg from './yxdd.png';
 import { auth, db } from './firebase';
 
 const getCharacterImage = (charId: string | undefined) => {
@@ -22,6 +23,7 @@ const getCharacterImage = (charId: string | undefined) => {
     case 'hz': return hzImg;
     case 'hgte': return hgteImg;
     case 'ttd': return ttdImg;
+    case 'yxdd': return yxddImg;
     case 'hdd':
     default: return hddImg;
   }
@@ -242,7 +244,8 @@ const CHARACTER_REQUIREMENTS: Record<string, number> = {
   santa: 1000,
   hjdj: 2000,
   hz: 3000,
-  ttd: 0
+  ttd: 0,
+  yxdd: 0
 };
 
 let audioCtx: AudioContext | null = null;
@@ -284,7 +287,7 @@ const toggleMute = () => {
   return isMuted;
 };
 
-const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord' | 'powerup') => {
+const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord' | 'powerup' | 'yxdd_roar' | 'yxdd_coins') => {
   if (!audioCtx) return;
   try {
     const osc = audioCtx.createOscillator();
@@ -301,6 +304,36 @@ const playSound = (type: 'jump' | 'score' | 'gameover' | 'hit' | 'newRecord' | '
       gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
       osc.start(now);
       osc.stop(now + 0.1);
+    } else if (type === 'yxdd_roar') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.8);
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+      
+      const noiseOsc = audioCtx.createOscillator();
+      const noiseGain = audioCtx.createGain();
+      noiseOsc.type = 'square';
+      noiseOsc.frequency.setValueAtTime(100, now);
+      noiseOsc.frequency.exponentialRampToValueAtTime(30, now + 0.8);
+      noiseOsc.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+      noiseGain.gain.setValueAtTime(0.2, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+      noiseOsc.start(now);
+      noiseOsc.stop(now + 0.8);
+      
+      osc.start(now);
+      osc.stop(now + 0.8);
+    } else if (type === 'yxdd_coins') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.setValueAtTime(1600, now + 0.05);
+      osc.frequency.setValueAtTime(2000, now + 0.1);
+      gainNode.gain.setValueAtTime(0.1, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      osc.start(now);
+      osc.stop(now + 0.2);
     } else if (type === 'score') {
       osc.type = 'square';
       osc.frequency.setValueAtTime(800, now);
@@ -400,6 +433,13 @@ interface Player {
   ttdMultiplier: number;
   ttdSuperJump: boolean;
   ttdEnergyBar: { active: boolean, type: 'jump' | 'crouch', timer: number, maxTimer: number };
+  combo: number;
+  yxddSkillActive: number;
+  yxddSkillType: '真龙领域' | '黄袍加身' | '御驾亲征' | '皇家贡品' | '龙吞天下' | '九五之尊' | null;
+  yxddInventory: PowerUpType[];
+  yxddHuangpaoActive: boolean;
+  yxddHuangpaoTimer: number;
+  yxddLonglin: number;
 }
 
 const TtdUI = ({ playerRef, selectedCharacter }: { playerRef: React.RefObject<Player>, selectedCharacter: string }) => {
@@ -473,6 +513,56 @@ const TtdUI = ({ playerRef, selectedCharacter }: { playerRef: React.RefObject<Pl
           </span>
         </div>
       </div>
+    </div>
+  );
+};
+
+const YxddUI = ({ playerRef, selectedCharacter, activateSkill }: { playerRef: React.RefObject<Player>, selectedCharacter: string, activateSkill: () => void }) => {
+  const [tick, setTick] = useState(0);
+  
+  useEffect(() => {
+    let frame: number;
+    const update = () => {
+      setTick(t => t + 1);
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  if (selectedCharacter !== 'yxdd') return null;
+  const player = playerRef.current;
+  if (!player) return null;
+
+  const inv = player.yxddInventory;
+  const isReady = inv.length === 2;
+
+  return (
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+      <div className="flex gap-4">
+        {/* Slot 1 */}
+        <div className={`w-16 h-16 rounded-lg border-4 flex items-center justify-center bg-amber-100/80 shadow-lg transition-all ${inv[0] ? 'border-amber-500 scale-110' : 'border-amber-900/50'}`}>
+          {inv[0] && <span className="text-3xl drop-shadow-md">{POWERUP_CONFIG[inv[0]].icon}</span>}
+        </div>
+        {/* Slot 2 */}
+        <div className={`w-16 h-16 rounded-lg border-4 flex items-center justify-center bg-amber-100/80 shadow-lg transition-all ${inv[1] ? 'border-amber-500 scale-110' : 'border-amber-900/50'}`}>
+          {inv[1] && <span className="text-3xl drop-shadow-md">{POWERUP_CONFIG[inv[1]].icon}</span>}
+        </div>
+      </div>
+      
+      <AnimatePresence>
+        {isReady && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            onClick={activateSkill}
+            className="px-6 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 rounded-full border-2 border-yellow-300 shadow-[0_0_15px_rgba(245,158,11,0.6)] text-white font-bold tracking-widest"
+          >
+            朕意已决！
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -832,7 +922,7 @@ function GameContent() {
   
   const [isMutedState, setIsMutedState] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte' | 'ttd'>('hdd');
+  const [selectedCharacter, setSelectedCharacter] = useState<'hdd' | 'santa' | 'hjdj' | 'hz' | 'hgte' | 'ttd' | 'yxdd'>('hdd');
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(true);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -889,7 +979,14 @@ function GameContent() {
     ttdCombo: 0,
     ttdMultiplier: 1,
     ttdSuperJump: false,
-    ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 }
+    ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 },
+    combo: 0,
+    yxddSkillActive: 0,
+    yxddSkillType: null,
+    yxddInventory: [],
+    yxddHuangpaoActive: false,
+    yxddHuangpaoTimer: 0,
+    yxddLonglin: 0
   });
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
@@ -2268,7 +2365,14 @@ function GameContent() {
       ttdCombo: 0,
       ttdMultiplier: 1,
       ttdSuperJump: false,
-      ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 }
+      ttdEnergyBar: { active: false, type: 'jump', timer: 0, maxTimer: 90 },
+      combo: 0,
+      yxddSkillActive: 0,
+      yxddSkillType: null,
+      yxddInventory: [],
+      yxddHuangpaoActive: false,
+      yxddHuangpaoTimer: 0,
+      yxddLonglin: 0
     };
     
     obstaclesRef.current = [];
@@ -2562,6 +2666,51 @@ function GameContent() {
     }
   }, [selectedCharacter]);
 
+  const activateYxddSkill = useCallback(() => {
+    if (selectedCharacter === 'yxdd' && playerRef.current && playerRef.current.yxddInventory.length === 2) {
+      const inv = playerRef.current.yxddInventory;
+      const hasShield = inv.includes('shield');
+      const hasMagnet = inv.includes('magnet');
+      const hasDouble = inv.includes('doubleScore');
+      const hasDash = inv.includes('dash');
+
+      if (hasShield && hasMagnet) {
+        playerRef.current.yxddSkillType = '真龙领域';
+        playerRef.current.yxddSkillActive = 360; // 6 seconds
+        playSound('powerup');
+      } else if (hasShield && hasDouble) {
+        playerRef.current.yxddSkillType = '黄袍加身';
+        playerRef.current.yxddHuangpaoActive = true;
+        playerRef.current.yxddHuangpaoTimer = 0;
+        playSound('powerup');
+      } else if (hasShield && hasDash) {
+        playerRef.current.yxddSkillType = '御驾亲征';
+        playerRef.current.yxddSkillActive = 300; // 5 seconds
+        playSound('yxdd_roar');
+      } else if (hasMagnet && hasDouble) {
+        playerRef.current.yxddSkillType = '皇家贡品';
+        playerRef.current.yxddSkillActive = 480; // 8 seconds
+        playSound('yxdd_coins');
+      } else if (hasMagnet && hasDash) {
+        playerRef.current.yxddSkillType = '龙吞天下';
+        playerRef.current.yxddSkillActive = 240; // 4 seconds
+        playSound('powerup');
+      } else if (hasDouble && hasDash) {
+        playerRef.current.yxddSkillType = '九五之尊';
+        playerRef.current.yxddSkillActive = 180; // 3 seconds "帝王时刻"
+        
+        // Instant skip 8 seconds
+        setScore(s => s + Math.floor(speedRef.current * 8 * 60));
+        obstaclesRef.current = [];
+        playSound('powerup');
+      }
+
+      playerRef.current.yxddInventory = [];
+      envRef.current.announcement = '朕意已决！';
+      envRef.current.announcementTimer = 120;
+    }
+  }, [selectedCharacter]);
+
   // --- Match Score Sync ---
   const lastSyncedScoreRef = useRef(0);
   const lastSyncTimeRef = useRef(0);
@@ -2605,9 +2754,9 @@ function GameContent() {
     setDifficulty(newDifficulty);
     const timeFactor = Math.floor(frameCountRef.current / 1000);
     const cycleCount = Math.floor(scoreAccumulatorRef.current / CYCLE_SCORE);
-    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 1.5 + (cycleCount * 0.5);
-    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.05);
-    const minSpawnRate = Math.max(60, 90 - (cycleCount * 10));
+    const maxSpeed = DIFFICULTY_SETTINGS[newDifficulty].speed + 1.0 + (cycleCount * 0.2);
+    speedRef.current = Math.min(maxSpeed, DIFFICULTY_SETTINGS[newDifficulty].speed + timeFactor * 0.02);
+    const minSpawnRate = Math.max(75, 90 - (cycleCount * 5));
     spawnRateRef.current = Math.max(minSpawnRate, DIFFICULTY_SETTINGS[newDifficulty].spawnRate - timeFactor * 0.5);
   }, []);
 
@@ -2890,6 +3039,15 @@ function GameContent() {
       if (player.hzSkillSprint > 0) player.hzSkillSprint -= dt;
       if (player.hjdjSkillCooldown > 0) player.hjdjSkillCooldown -= dt;
       if (blackHoleCooldownRef.current > 0) blackHoleCooldownRef.current -= dt;
+      if (player.yxddSkillActive > 0) {
+        player.yxddSkillActive -= dt;
+        if (player.yxddSkillActive <= 0) {
+          player.yxddSkillType = null;
+        }
+      }
+      if (player.yxddHuangpaoActive) {
+        player.yxddHuangpaoTimer += dt / 60; // seconds
+      }
       
       if (selectedCharacter === 'ttd') {
         if (!player.ttdEnergyBar.active) {
@@ -2964,7 +3122,12 @@ function GameContent() {
         const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
         const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
         const hzMult = (selectedCharacter === 'hz' && player.hzSkillActive > 0) ? 2 : 1;
-        const increment = 5 * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult;
+        const yxddHuangpaoMult = (selectedCharacter === 'yxdd' && player.yxddHuangpaoActive) ? 1.5 : 1;
+        const yxddJiowuMult = (selectedCharacter === 'yxdd' && player.yxddSkillType === '九五之尊') ? (1 + player.combo * 0.03) * 2 : 1;
+        const comboMult = 1 + player.combo * 0.03; // 3% per combo
+        // Base increment scales with speed (starts at ~5, goes up to 15+)
+        const baseIncrement = speedRef.current;
+        const increment = baseIncrement * (dt / 60) * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult * yxddHuangpaoMult * (yxddJiowuMult > 1 ? yxddJiowuMult : comboMult);
         scoreAccumulatorRef.current += increment;
         const integerIncrement = Math.floor(scoreAccumulatorRef.current);
         
@@ -3096,7 +3259,10 @@ function GameContent() {
       }
 
       // Physics
-      if (player.dash > 0 || player.hjdjSkillActive > 0) {
+      if (player.dash > 0 || player.hjdjSkillActive > 0 || player.yxddSkillType === '龙吞天下') {
+        player.vy = 0;
+        player.y = groundY - player.height;
+      } else if (player.yxddSkillType === '御驾亲征') {
         player.vy = 0;
         player.y = groundY - player.height;
       } else {
@@ -3187,9 +3353,15 @@ function GameContent() {
 
       // Speed Lines Update
       const weatherSpeedMod = envRef.current.weather === 'WIND_FORWARD' ? 1.3 : envRef.current.weather === 'WIND_BACKWARD' ? 0.7 : 1;
-      const currentSpeed = speedRef.current * currentBiome.speedMod * weatherSpeedMod * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 ? 3 : 1);
+      let currentSpeed = speedRef.current * currentBiome.speedMod * weatherSpeedMod * (player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 || player.yxddSkillType === '龙吞天下' ? 3 : 1);
       
-      const isHighSpeed = currentSpeed > 8 || player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0;
+      if (player.yxddSkillType === '御驾亲征') {
+        currentSpeed *= 0.8;
+      } else if (player.yxddSkillType === '九五之尊') {
+        currentSpeed *= 0.3;
+      }
+      
+      const isHighSpeed = currentSpeed > 8 || player.dash > 0 || player.hjdjSkillActive > 0 || player.hzSkillSprint > 0 || player.yxddSkillType === '龙吞天下';
       if (isHighSpeed) {
         // Spawn more lines based on speed
         const spawnCount = Math.floor((currentSpeed - 5) / 2);
@@ -3228,11 +3400,11 @@ function GameContent() {
 
       if (Math.floor(frameCountRef.current / 1000) > Math.floor(prevFrameCount / 1000)) {
         const cycleCount = Math.floor(score / CYCLE_SCORE);
-        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 1.5 + (cycleCount * 0.5);
+        const maxSpeed = DIFFICULTY_SETTINGS[difficulty].speed + 1.0 + (cycleCount * 0.2);
         if (speedRef.current < maxSpeed) {
-          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.05);
+          speedRef.current = Math.min(maxSpeed, speedRef.current + 0.02);
         }
-        const minSpawnRate = Math.max(60, 90 - (cycleCount * 10));
+        const minSpawnRate = Math.max(75, 90 - (cycleCount * 5));
         spawnRateRef.current = Math.max(minSpawnRate, spawnRateRef.current - 0.5);
       }
 
@@ -3432,7 +3604,29 @@ function GameContent() {
             if (player.x < p.x + p.width && player.x + player.width > p.x &&
                 player.y < p.y + p.height && player.y + player.height > p.y) {
               
-              if (player.shield > 0 || player.hzSkillActive > 0) {
+              if (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0) {
+                player.yxddSkillActive = 0; // Break shield
+                player.invincibility = 60;
+                playSound('hit');
+                createParticles(player.x, player.y, '#60a5fa', 50);
+                boss.projectiles.splice(i, 1);
+                continue;
+              } else if (player.yxddHuangpaoActive) {
+                player.yxddHuangpaoActive = false;
+                const duration = player.yxddHuangpaoTimer;
+                setScore(s => s + Math.floor(duration * 100)); // Huge score
+                createParticles(player.x + player.width/2, player.y + player.height/2, '#fbbf24', 100);
+                boss.projectiles.length = 0; // Clear screen
+                playSound('powerup');
+                continue;
+              } else if (player.yxddLonglin > 0) {
+                player.yxddLonglin -= 1;
+                player.combo = Math.max(0, player.combo - 5);
+                player.invincibility = 120;
+                createParticles(player.x + player.width/2, player.y + player.height/2, '#fbbf24', 30);
+                boss.projectiles.splice(i, 1);
+                continue;
+              } else if (player.shield > 0 || player.hzSkillActive > 0) {
                 if (player.hzSkillActive > 0) {
                   player.hzSkillActive = 0;
                   player.hzSkillSprint = 300; // 5 seconds sprint
@@ -3499,7 +3693,7 @@ function GameContent() {
           item.x -= currentSpeed * dt;
 
           // Magnet effect
-          if (player.magnet > 0 || player.hxdActive) {
+          if (player.magnet > 0 || player.hxdActive || (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0) || (player.yxddSkillType === '皇家贡品' && player.yxddSkillActive > 0) || (player.yxddSkillType === '龙吞天下' && player.yxddSkillActive > 0)) {
             const dx = player.x - item.x;
             const dy = player.y - item.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
@@ -3572,7 +3766,7 @@ function GameContent() {
         pu.x -= currentSpeed * dt;
 
         // Magnet effect
-        if (player.magnet > 0 || player.hxdActive) {
+        if (player.magnet > 0 || player.hxdActive || (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0) || (player.yxddSkillType === '皇家贡品' && player.yxddSkillActive > 0) || (player.yxddSkillType === '龙吞天下' && player.yxddSkillActive > 0)) {
           const dx = player.x - pu.x;
           const dy = player.y - pu.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
@@ -3621,6 +3815,19 @@ function GameContent() {
             }
           }
 
+          // Yxdd inventory
+          if (selectedCharacter === 'yxdd') {
+            if (!player.yxddInventory.includes(pu.type)) {
+              if (player.yxddInventory.length < 2) {
+                player.yxddInventory.push(pu.type);
+              } else {
+                // If full, maybe replace the oldest? Let's replace the first one
+                player.yxddInventory.shift();
+                player.yxddInventory.push(pu.type);
+              }
+            }
+          }
+
           playSound('score');
           if (pu.type === 'shield') {
             player.shield = 1; // Infinite until hit
@@ -3647,7 +3854,7 @@ function GameContent() {
         c.x -= currentSpeed * dt;
 
         // Magnet effect
-        if (player.magnet > 0 || player.hxdActive || bonusLevelRef.current.active) {
+        if (player.magnet > 0 || player.hxdActive || bonusLevelRef.current.active || (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0) || (player.yxddSkillType === '皇家贡品' && player.yxddSkillActive > 0) || (player.yxddSkillType === '龙吞天下' && player.yxddSkillActive > 0)) {
           const dx = player.x - c.x;
           const dy = player.y - c.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
@@ -3667,6 +3874,9 @@ function GameContent() {
           playSound('score');
           const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
           setScore(s => s + Math.floor(10 * ttdMult));
+          if (selectedCharacter === 'yxdd' && player.yxddSkillType === '皇家贡品') {
+            player.combo += 2;
+          }
           createParticles(c.x + c.width/2, c.y + c.height/2, '#fbbf24', 15);
           coinsRef.current.splice(i, 1);
           continue;
@@ -3683,7 +3893,7 @@ function GameContent() {
         d.x -= currentSpeed * dt;
 
         // Magnet effect
-        if (player.magnet > 0 || player.hxdActive) {
+        if (player.magnet > 0 || player.hxdActive || (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0) || (player.yxddSkillType === '皇家贡品' && player.yxddSkillActive > 0) || (player.yxddSkillType === '龙吞天下' && player.yxddSkillActive > 0)) {
           const dx = player.x - d.x;
           const dy = player.y - d.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
@@ -3721,6 +3931,10 @@ function GameContent() {
               player.hgteSkillCharges += 1;
               player.hgtePartialCharges = 0;
             }
+          }
+          
+          if (selectedCharacter === 'yxdd' && player.yxddSkillType === '皇家贡品') {
+            player.combo += 2;
           }
           
           createParticles(d.x, d.y, '#60a5fa', 15);
@@ -3780,6 +3994,43 @@ function GameContent() {
           if (Math.abs(obs.y - obs.initialY) > 50) obs.vy *= -1;
         }
 
+        // Yxdd skills
+        if (player.yxddSkillActive > 0) {
+          if (player.yxddSkillType === '真龙领域' && obs.x < player.x + 400) {
+            createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#60a5fa', 20);
+            coinsRef.current.push({ x: obs.x, y: obs.y, width: 30, height: 30, collected: false });
+            obstacles.splice(i, 1);
+            continue;
+          }
+          if (player.yxddSkillType === '皇家贡品' && obs.x < player.x + 800) {
+            createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#fbbf24', 20);
+            if (Math.random() > 0.5) {
+              diamondsRef.current.push({ x: obs.x, y: obs.y, width: 30, height: 30, collected: false });
+            } else {
+              coinsRef.current.push({ x: obs.x, y: obs.y, width: 30, height: 30, collected: false });
+            }
+            obstacles.splice(i, 1);
+            continue;
+          }
+          if (player.yxddSkillType === '龙吞天下' && obs.x < player.x + 200) {
+            createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ffffff', 20);
+            player.combo += 1;
+            if (player.combo % 5 === 0) {
+              const types: PowerUpType[] = ['shield', 'magnet', 'doubleScore', 'dash'];
+              const randomType = types[Math.floor(Math.random() * types.length)];
+              powerUpsRef.current.push({ x: player.x + 400, y: player.y, width: 40, height: 40, type: randomType, collected: false });
+            }
+            obstacles.splice(i, 1);
+            continue;
+          }
+          if (player.yxddSkillType === '御驾亲征' && obs.x < player.x + 100) {
+            createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ef4444', 20);
+            if (player.yxddLonglin < 3) player.yxddLonglin += 1;
+            obstacles.splice(i, 1);
+            continue;
+          }
+        }
+
         // Hjdj skill destruction
         if (player.hjdjSkillActive > 0 && obs.x < player.x + 400) {
           createParticles(obs.x + obs.width/2, obs.y + obs.height/2, '#ff4400', 20);
@@ -3806,6 +4057,23 @@ function GameContent() {
         ) {
           if (player.invincibility > 0) {
             // Skip collision
+            continue;
+          }
+          if (player.yxddHuangpaoActive) {
+            player.yxddHuangpaoActive = false;
+            const duration = player.yxddHuangpaoTimer;
+            setScore(s => s + Math.floor(duration * 100)); // Huge score
+            createParticles(player.x + player.width/2, player.y + player.height/2, '#fbbf24', 100);
+            obstacles.length = 0; // Clear screen
+            playSound('powerup');
+            continue;
+          }
+          if (player.yxddLonglin > 0) {
+            player.yxddLonglin -= 1;
+            player.combo = Math.max(0, player.combo - 5); // Lose some combo
+            player.invincibility = 120;
+            createParticles(player.x + player.width/2, player.y + player.height/2, '#fbbf24', 30);
+            obstacles.splice(i, 1);
             continue;
           }
           if (player.dash > 0) {
@@ -3884,12 +4152,14 @@ function GameContent() {
 
         if (!obs.passed && obs.x + obs.width < player.x) {
           obs.passed = true;
+          player.combo++;
           playSound('score');
           setScore(s => {
             const dashMultiplier = (selectedCharacter === 'santa' && player.dash > 0) ? 3 : 1;
             const ttdMult = selectedCharacter === 'ttd' ? player.ttdMultiplier : 1;
             const hzMult = (selectedCharacter === 'hz' && player.hzSkillActive > 0) ? 2 : 1;
-            const newScore = s + Math.floor((player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult);
+            const comboMult = 1 + player.combo * 0.03;
+            const newScore = s + Math.floor(10 * (player.doubleScore > 0 ? 2 : 1) * dashMultiplier * ttdMult * hzMult * comboMult);
             checkAchievements(newScore);
             
             if (newScore > highScore && highScore > 0 && !envRef.current.hasAnnouncedNewRecord) {
@@ -4323,15 +4593,15 @@ function GameContent() {
       }
 
       // Shield Effect
-      if (player.shield > 0 || player.hzSkillActive > 0) {
-        ctx.strokeStyle = player.hzSkillActive > 0 ? '#60a5fa' : '#34d399';
-        ctx.lineWidth = 4;
+      if (player.shield > 0 || player.hzSkillActive > 0 || (player.yxddSkillType === '真龙领域' && player.yxddSkillActive > 0)) {
+        ctx.strokeStyle = player.hzSkillActive > 0 ? '#60a5fa' : (player.yxddSkillType === '真龙领域' ? '#fbbf24' : '#34d399');
+        ctx.lineWidth = player.yxddSkillType === '真龙领域' ? 6 : 4;
         ctx.beginPath();
         ctx.arc(player.x + player.width/2, player.y + player.height/2, player.height/1.5, 0, Math.PI * 2);
         ctx.stroke();
         
-        if (player.hzSkillActive > 0) {
-          ctx.fillStyle = 'rgba(96, 165, 250, 0.2)';
+        if (player.hzSkillActive > 0 || player.yxddSkillType === '真龙领域') {
+          ctx.fillStyle = player.yxddSkillType === '真龙领域' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(96, 165, 250, 0.2)';
           ctx.fill();
         }
       }
@@ -4374,10 +4644,45 @@ function GameContent() {
           offsetY -= (newDrawHeight - drawHeight);
           drawWidth = newDrawWidth;
           drawHeight = newDrawHeight;
+        } else if (selectedCharacter === 'yxdd') {
+          let scale = 1.5; // Reduced from 1.8
+          if (player.yxddSkillType === '御驾亲征') {
+            scale = 2.0; // Reduced from 2.5
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 20;
+          } else if (player.yxddHuangpaoActive) {
+            ctx.shadowColor = '#fbbf24';
+            ctx.shadowBlur = 30;
+          } else if (player.yxddSkillType === '龙吞天下') {
+            ctx.filter = 'brightness(200%) contrast(200%)';
+            ctx.globalAlpha = 0.8;
+          }
+          
+          const newDrawWidth = drawWidth * scale;
+          const newDrawHeight = drawHeight * scale;
+          offsetX -= (newDrawWidth - drawWidth) / 2;
+          offsetY -= (newDrawHeight - drawHeight);
+          drawWidth = newDrawWidth;
+          drawHeight = newDrawHeight;
         }
         
         ctx.drawImage(playerImage, player.x + offsetX, player.y + offsetY, drawWidth, drawHeight);
         ctx.restore();
+
+        // Draw Yxdd Longlin (Dragon Scales)
+        if (selectedCharacter === 'yxdd' && player.yxddLonglin > 0) {
+          ctx.save();
+          for (let i = 0; i < player.yxddLonglin; i++) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width/2 + (i - 1) * 20, player.y - 10, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
 
         // Draw Title above head
         if (selectedTitle && TITLES[selectedTitle]) {
@@ -5495,7 +5800,7 @@ function GameContent() {
                 <div>
                   <label className="block text-[#A65D2C] font-bold mb-2">附加奖励</label>
                   <div className="flex flex-wrap gap-2">
-                    {['diamonds', 'shield', 'magnet', 'doubleScore', 'dash', 'hgteFragments', 'ttdFragments', 'char_santa', 'char_hjdj', 'char_hz', 'char_hgte', 'char_ttd'].map(type => {
+                    {['diamonds', 'shield', 'magnet', 'doubleScore', 'dash', 'hgteFragments', 'ttdFragments', 'char_santa', 'char_hjdj', 'char_hz', 'char_hgte', 'char_ttd', 'char_yxdd'].map(type => {
                       const label = type === 'diamonds' ? '钻石' : 
                                     type === 'shield' ? '护盾' : 
                                     type === 'magnet' ? '磁铁' : 
@@ -5507,7 +5812,8 @@ function GameContent() {
                                     type === 'char_hjdj' ? '角色: 海军大将' : 
                                     type === 'char_hz' ? '角色: 呼子' : 
                                     type === 'char_hgte' ? '角色: 呼刚帝尔' : 
-                                    type === 'char_ttd' ? '角色: 跳跳帝' : type;
+                                    type === 'char_ttd' ? '角色: 跳跳帝' : 
+                                    type === 'char_yxdd' ? '角色: 御熊大帝' : type;
                       return (
                       <button
                         key={type}
@@ -5543,7 +5849,8 @@ function GameContent() {
                                       reward.type === 'char_hjdj' ? '角色: 海军大将' : 
                                       reward.type === 'char_hz' ? '角色: 呼子' : 
                                       reward.type === 'char_hgte' ? '角色: 呼刚帝尔' : 
-                                      reward.type === 'char_ttd' ? '角色: 跳跳帝' : reward.type;
+                                      reward.type === 'char_ttd' ? '角色: 跳跳帝' : 
+                                      reward.type === 'char_yxdd' ? '角色: 御熊大帝' : reward.type;
                         return (
                         <div key={reward.type} className="flex items-center gap-2 bg-white p-2 rounded-lg border-2 border-[#FAD689]">
                           <span className="font-bold text-[#A65D2C] w-32 truncate" title={label}>
@@ -5979,13 +6286,15 @@ function GameContent() {
           </button>
         )}
 
-        {/* Score & Diamonds Display (Playing) */}
+        {/* Score & Combo Display (Playing) */}
         {gameState === 'playing' && (
           <div className="absolute top-4 right-16 z-10 flex flex-col items-end gap-2">
             <div className="flex gap-2">
-              <div className="bg-black/50 px-3 py-1 rounded-full border border-white/20 flex items-center gap-2">
-                <span className="text-blue-400 text-sm">💎</span>
-                <span className="font-mono text-blue-400 font-bold text-lg">{diamonds}</span>
+              <div className="bg-black/50 px-3 py-1 rounded-full border border-[#f59e0b]/50 flex items-center gap-1 shadow-lg">
+                <span className="text-[#f59e0b] text-sm font-bold">连击数:</span>
+                <span className="font-mono text-[#f59e0b] font-black italic text-xl leading-none">{playerRef.current?.combo || 0}</span>
+                <span className="text-[#ef4444] text-sm font-bold ml-2">倍率:</span>
+                <span className="font-mono text-[#ef4444] font-black italic text-xl leading-none">x{(1 + (playerRef.current?.combo || 0) * 0.03).toFixed(2)}</span>
               </div>
               <div className="bg-black/50 px-4 py-1 rounded-full border border-white/20 flex flex-col items-end">
                 <span className="font-mono text-yellow-400 font-bold text-xl leading-none">{Math.floor(score)}</span>
@@ -6084,6 +6393,11 @@ function GameContent() {
         {/* TTD UI */}
         {gameState === 'playing' && (
           <TtdUI playerRef={playerRef} selectedCharacter={selectedCharacter} />
+        )}
+
+        {/* YXDD UI */}
+        {gameState === 'playing' && (
+          <YxddUI playerRef={playerRef} selectedCharacter={selectedCharacter} activateSkill={activateYxddSkill} />
         )}
 
         {/* Hjdj Skill Button */}
@@ -6548,6 +6862,13 @@ function GameContent() {
                       img: ttdImg,
                       skill: '技能：三段跳',
                       desc: '拥有三段跳能力。按照能量条提示进行“跳跃”或“蹲下”操作可触发连击并提升得分倍率。连续达成5次连击将触发“超高一跳”，落地时摧毁屏幕内所有障碍物并获得高额得分。每次超高一跳会永久增加得分倍率，上限提升至3.5倍。'
+                    },
+                    {
+                      id: 'yxdd',
+                      name: '御熊大帝',
+                      img: yxddImg,
+                      skill: '被动：天下进贡',
+                      desc: '大帝的行囊里可以存放两件不同的“贡品”（道具）。当收集到两件不同的贡品时，大帝便会下达“圣旨”，触发强大的组合帝王技能。'
                     }
                   ].map(char => {
                     const isUnlocked = unlockedCharacters.includes(char.id);
